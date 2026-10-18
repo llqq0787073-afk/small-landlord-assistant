@@ -1,0 +1,721 @@
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { Language } from '../types';
+
+interface I18nContextType {
+  lang: Language;
+  setLang: (lang: Language) => void;
+  t: (key: string, defaultText?: string) => string;
+}
+
+const translations: Record<Language, Record<string, string>> = {
+  en: {
+    // App Branding
+    appName: 'Small Landlord Assistant',
+    appSubtitle: 'Lightweight Rental & Compliance OS for 1–10 Units',
+    
+    // Roles & Portals
+    landlordPortal: 'Landlord Portal',
+    tenantPortal: 'Tenant Portal',
+    adminPortal: 'Admin & Compliance',
+    switchRole: 'Switch Role',
+    currentRole: 'Current Role',
+    
+    // Navigation
+    navDashboard: 'Dashboard',
+    navAnalytics: 'Live Analytics',
+    navProperties: 'Properties & Units',
+    navLeases: 'Leases & Tenants',
+    navRentLedger: 'Rent Ledger',
+    navMaintenance: 'Maintenance',
+    navTasks: 'Tasks',
+    navInspections: 'Inspections & Photo Hash',
+    navMessages: 'Messages',
+    navLegalResources: 'Legal Resources',
+    navDocuments: 'Documents',
+    navAdmin: 'Platform Admin',
+    
+    // Tenant Navigation
+    navTenantHome: 'My Home',
+    navTenantLease: 'My Lease',
+    navTenantRent: 'Rent & Payments',
+    navTenantMaintenance: 'Report Issue',
+    navTenantMessages: 'Chat Landlord',
+    navTenantInspection: 'Inspection Review',
+    navTenantRights: 'Tenant Rights Guide',
+
+    // Dashboard KPIs
+    kpiTotalUnits: 'Total Units',
+    kpiOccupied: 'Occupied',
+    kpiVacant: 'Vacant',
+    kpiRentDue: 'October Rent Due',
+    kpiRentCollected: 'Rent Collected',
+    kpiOutstanding: 'Outstanding Balance',
+    kpiOpenRepairs: 'Open Repairs',
+    kpiExpiringLeases: 'Expiring (30-60d)',
+    kpiNetCashflow: 'Net Operating Cashflow',
+    
+    // Quick Actions
+    quickActions: 'Quick Actions',
+    actionAddProperty: 'Add Property',
+    actionRecordRent: 'Record Payment',
+    actionNewRepair: 'New Work Order',
+    actionInspection: 'New Inspection',
+    actionSimulateEvent: 'Simulate Live Event',
+    
+    // Recent Activity
+    recentActivity: 'Recent Portfolio Activity',
+    viewAll: 'View All',
+    
+    // Realtime Analytics
+    analyticsTitle: 'Portfolio Analytics Engine',
+    analyticsSubtitle: 'Live telemetry: Cash flow, collection velocity, repair turnaround, and occupancy dynamics',
+    collectionRate: 'Collection Velocity',
+    sixMonthRevenue: '6-Month Rent Receipts vs Maintenance Costs',
+    expenseBreakdown: 'Operating Expenses by Category',
+    turnaroundTime: 'Avg Maintenance Resolution',
+    daysUnit: 'days',
+    liveEventSimulation: 'Live Analytics Simulator',
+    simulateRentReceipt: 'Simulate Incoming Rent (+$1,850)',
+    simulateMaintenanceTicket: 'Simulate Emergency Ticket',
+    portfolioStateSpread: 'Portfolio Distribution by State',
+    
+    // Property Management
+    addPropertyModalTitle: 'Add Rental Property',
+    propertyName: 'Property Name',
+    address: 'Street Address',
+    city: 'City',
+    state: 'State / Jurisdiction',
+    county: 'County',
+    zip: 'ZIP Code',
+    propertyType: 'Property Type',
+    unitsCount: 'Rental Units Count',
+    yearBuilt: 'Year Built',
+    bedrooms: 'Bedrooms',
+    bathrooms: 'Bathrooms',
+    sqft: 'Square Feet',
+    monthlyRent: 'Monthly Rent',
+    securityDeposit: 'Security Deposit',
+    occupancyStatus: 'Occupancy Status',
+    statusOccupied: 'Occupied',
+    statusVacant: 'Vacant',
+    statusMaintenance: 'In Maintenance',
+    statusInactive: 'Inactive',
+    appliances: 'Appliances & Amenities',
+    singleFamily: 'Single Family Home',
+    townhouse: 'Townhouse / Duplex',
+    apartment: 'Apartment',
+    multiFamily: 'Multi-Family Building',
+    condo: 'Condominium',
+    
+    // Rent Ledger
+    rentLedgerTitle: 'Rent Tracking & Dual Ledger',
+    rentLedgerSubtitle: 'Compliant tracking of rent charges, payments, and adjustments. Hand-recorded payments marked as Landlord-Reported.',
+    landlordReportedBadge: 'Landlord-Reported',
+    recordPaymentBtn: 'Record Payment',
+    addAdjustmentBtn: 'Adjust Ledger',
+    exportCsvBtn: 'Export CSV',
+    generateStatementBtn: 'Generate Statement',
+    printReceiptBtn: 'Print Receipt',
+    chargeDate: 'Charge Date',
+    tenant: 'Tenant',
+    unit: 'Unit',
+    expectedAmount: 'Expected',
+    receivedAmount: 'Received',
+    balance: 'Balance',
+    paymentMethod: 'Payment Method',
+    paymentSource: 'Source',
+    bankTransfer: 'Bank Transfer (ACH)',
+    check: 'Check',
+    zelle: 'Zelle / Digital',
+    cash: 'Cash',
+    creditCard: 'Credit Card',
+    partialPaymentWarning: 'Partial Payment Recorded',
+    
+    // Maintenance
+    maintenanceTitle: 'Maintenance & Work Orders',
+    maintenanceSubtitle: 'Workflow from tenant submission to completion photos with vendor and cost tracking.',
+    emergencyNoticeTitle: 'EMERGENCY DISCLAIMER: FOR LEAKS, GAS, OR FIRE',
+    emergencyNoticeBody: 'This application does NOT replace 911 emergency services or utility hazard hotlines. If there is immediate threat to life, fire, gas smell, or structural collapse, call 911 and your utility immediately.',
+    ticketStatusSubmitted: 'Submitted',
+    ticketStatusReviewed: 'Reviewed',
+    ticketStatusInProgress: 'In Progress',
+    ticketStatusCompleted: 'Completed',
+    ticketStatusClosed: 'Closed',
+    priorityEmergency: 'Emergency',
+    priorityHigh: 'High',
+    priorityMedium: 'Medium',
+    priorityLow: 'Low',
+    assignedVendor: 'Assigned Vendor',
+    estimatedCost: 'Est. Cost',
+    actualCost: 'Actual Cost',
+    completionPhotos: 'Completion Photos',
+    resolutionNotes: 'Resolution Notes',
+    markCompleted: 'Mark Completed',
+    
+    // Inspections & Photo Evidence
+    inspectionsTitle: 'Move-In / Move-Out Inspections & Photo Proof',
+    inspectionsSubtitle: 'Legally grounded evidence registry. Immutable server timestamps, SHA-256 photo hash verification, and side-by-side condition comparison.',
+    inspectionDisclaimer: 'Legal Notice: System records objective photographic conditions and dual signatures. Wear-and-tear vs damage classifications are human-recorded notes and do not constitute automatic legal determination.',
+    moveIn: 'Move-In Inspection',
+    moveOut: 'Move-Out Inspection',
+    compareMoveInOut: 'Compare Move-In vs. Move-Out',
+    sha256Verification: 'SHA-256 Digest',
+    serverTimestamp: 'Server Received',
+    exifInfo: 'EXIF Metadata',
+    roomCategory: 'Room / Item',
+    condition: 'Condition',
+    excellent: 'Excellent',
+    good: 'Good',
+    fair: 'Fair (Normal Wear)',
+    damaged: 'Damaged (Potential Liability)',
+    landlordSignOff: 'Landlord Sign-off',
+    tenantSignOff: 'Tenant Sign-off',
+    signed: 'Signed & Certified',
+    pendingSignature: 'Pending Signature',
+    exportPdfReport: 'Export PDF Inspection Report',
+    
+    // Messaging
+    messagingTitle: 'Tenant Communication & Audit Trail',
+    messagingSubtitle: 'Secure in-app direct messaging linked to tenancy units and maintenance requests.',
+    sendMsgPlaceholder: 'Type a message to tenant...',
+    attachPhoto: 'Attach Photo',
+    attachPdf: 'Attach PDF / Notice',
+    sendMessage: 'Send',
+    linkedTicket: 'Linked Ticket',
+    
+    // Legal Resources Center
+    legalCenterTitle: 'US State & Local Landlord-Tenant Legal Resources',
+    legalCenterSubtitle: 'Official government statutes, court guides, mandatory disclosures, and verified rules across 50 US States and D.C.',
+    legalDisclaimerHeader: 'Legal Information & Compliance Reference Disclaimer',
+    legalDisclaimerText: 'This directory provides access to official statutes, agency guides, and verified regulatory links. It is designed as an informational compliance reference tool for landlords and tenants and DOES NOT constitute legal advice or formal attorney representation. State and municipal rules change frequently; always consult licensed legal counsel for jurisdictional disputes.',
+    searchPlaceholder: 'Search statutes, disclosures, eviction procedures...',
+    filterByState: 'Filter by State',
+    filterByTopic: 'Legal Category',
+    allTopics: 'All 12 Categories',
+    allStates: 'All 50 States + D.C.',
+    verifiedBadge: 'Verified Official',
+    pendingReviewBadge: 'Pending Review',
+    archivedBadge: 'Archived Reference',
+    viewOfficialSite: 'Open Official Government Source',
+    bookmarkResource: 'Bookmark',
+    verifiedOn: 'Verified on',
+    effectiveDate: 'Effective',
+    agency: 'Issuing Agency',
+    
+    // Tasks
+    tasksTitle: 'Property Tasks & Workflows',
+    filterAll: 'All Tasks',
+    filterToday: 'Today',
+    filterOverdue: 'Overdue',
+    filterNext7Days: 'Next 7 Days',
+    statusTodo: 'To Do',
+    statusInProg: 'In Progress',
+    statusBlocked: 'Blocked',
+    statusDone: 'Completed',
+    addNewTask: 'New Task',
+    
+    // Admin & Subscription
+    adminTitle: 'Platform Administration & SaaS Subscriptions',
+    adminSubtitle: 'Multi-tenant account oversight, Stripe subscription plans, unit limits enforcement, and audit trail.',
+    adminNotice: 'Privacy & Security Guarantee: Platform administrators are technically prevented by system rules from casually inspecting private tenant chats, raw lease contents, or photo archives without explicit customer authorization.',
+    plansTitle: 'Subscription Pricing Plans (US Landlords)',
+    freeTrial: 'Free Trial',
+    starterPlan: 'Starter Plan',
+    standardPlan: 'Standard Plan',
+    plusPlan: 'Plus Plan',
+    unitsMax: 'Units Cap',
+    monthly: '/mo',
+    activeSubscribers: 'Active Landlord Accounts',
+    currentEnforcedPlan: 'Active Tier',
+    auditLogsTitle: 'Immutable Audit Trail',
+    
+    // Version 1.2 Authentication & User Management
+    landingHeroTitle: 'Rental Management Made Simple',
+    landingHeroSubtitle: 'Designed for landlords with 1–10 rental units',
+    landingLandlordCardTitle: 'Landlord / 房东',
+    landingLandlordCardDesc: 'Manage properties, rent, leases and repairs.',
+    landingLandlordBtn: 'Register / 注册',
+    landingTenantCardTitle: 'Tenant / 租客',
+    landingTenantCardDesc: 'View lease, rent, maintenance and messages.',
+    landingTenantBtn: 'Join / 加入',
+    landingAlreadyHaveAccount: 'Already have an account? Sign In / 已有账户？登录',
+    landingAdminNotice: 'Administrator access is managed separately / 管理员账户由平台安全创建',
+    landingDemoQuickAccess: 'Quick Sandbox & Demo Personas (One-Click)',
+    
+    // Landlord Register
+    landlordRegTitle: 'Create Landlord Account',
+    landlordRegSubtitle: 'Start managing your rental properties',
+    fullName: 'Full Name',
+    emailAddress: 'Email Address',
+    password: 'Password',
+    confirmPassword: 'Confirm Password',
+    showPasswords: 'Show passwords',
+    agreeTerms: 'I agree to the Terms of Service and Privacy Policy.',
+    createAccount: 'Create Account',
+    passwordRequirement: 'Password must be at least 8 characters with letters & numbers',
+    passwordsDoNotMatch: 'Passwords do not match',
+    termsRequired: 'Please agree to the Terms of Service and Privacy Policy',
+    emailAlreadyRegistered: 'If this email is already registered, a verification reminder was dispatched.',
+
+    // Tenant Register & Invite
+    tenantRegTitle: 'Tenant Registration',
+    tenantRegSubtitle: "Join your landlord's property",
+    invitationCode: 'Invitation Code',
+    invitationCodePlaceholder: 'e.g. SLA-7842-ELM',
+    activateTenantAccount: 'Activate Tenant Account',
+    invalidInvitationCode: 'Invalid or expired invitation code. Please request a new invite from your landlord.',
+    matchedUnitInfo: 'Linked Property & Unit',
+    invitationAcceptedSuccess: 'Tenant account successfully activated and bound to lease!',
+    landlordInviteTenantBtn: 'Invite Tenant (Create Code)',
+    invitationStatusPending: 'Pending Activation',
+    invitationStatusAccepted: 'Activated',
+    invitationStatusExpired: 'Expired',
+
+    // Unified Login
+    loginTitle: 'Welcome Back',
+    loginSubtitle: 'Sign in to Small Landlord Assistant',
+    selectPortal: 'Portal',
+    portalLandlord: 'Landlord / 房东',
+    portalTenant: 'Tenant / 租客',
+    portalAdmin: 'Admin / 管理员',
+    signIn: 'Sign In',
+    forgotPassword: 'Forgot Password?',
+    rememberMe: 'Remember me on this browser',
+    secureAuthBadge: 'Secure Authentication & RBAC Enforced',
+    demoLogins: 'One-Click Fast Demo Logins',
+    demoLandlordBtn: 'Landlord (David Miller - 5 Units)',
+    demoTenantBtn: 'Tenant (Emily Zhang - Unit 2B)',
+    demoAdminBtn: 'Admin (Sarah Lin - MFA Enforced)',
+    demoMultiRoleBtn: 'Multi-Role User (Alex Wong - Landlord & Tenant)',
+    accountSuspendedNotice: 'Your account is suspended by security policy. Contact administrator.',
+    emailUnverifiedNotice: 'Please verify your email address before continuing.',
+    invalidCredentials: 'Invalid email or password. Please try again.',
+    signOut: 'Sign Out',
+
+    // MFA
+    mfaTitle: 'Two-Factor Authentication (MFA)',
+    mfaSubtitle: 'Mandatory TOTP challenge for administrative access',
+    mfaCodeLabel: '6-Digit Verification Code',
+    mfaVerifyBtn: 'Verify & Access Admin Console',
+    mfaDemoHint: 'Demo TOTP code: 123456',
+    mfaCodeInvalid: 'Invalid 6-digit code. Try 123456 for demo.',
+
+    // Role Switcher
+    roleSwitcherTitle: 'Select Destination Portal',
+    roleSwitcherSubtitle: 'Your account holds multiple verified roles. Choose where to go:',
+    enterAsLandlord: 'Enter Landlord Portal',
+    enterAsTenant: 'Enter Tenant Portal',
+    enterAsAdmin: 'Enter Admin Console',
+
+    // Password Reset & Verification
+    resetPasswordTitle: 'Reset Account Password',
+    resetPasswordSubtitle: 'Enter your email to receive a secure one-time password reset token',
+    sendResetLink: 'Send Reset Link',
+    resetTokenLabel: 'Reset Security Token',
+    newPasswordLabel: 'New Password',
+    updatePasswordBtn: 'Update Password',
+    resetEmailSent: 'Reset link simulated and dispatched. Check the token below:',
+    passwordResetSuccess: 'Password has been successfully updated. You may now log in.',
+    emailVerificationTitle: 'Verify Your Email Address',
+    emailVerificationSubtitle: 'We have dispatched an activation code to your email inbox',
+    simulateEmailVerifyBtn: 'Simulate Email Verification (Instant)',
+    emailVerifiedSuccess: 'Email successfully verified! You may now access your account.',
+
+    // Profile Settings
+    profileSettingsTitle: 'Account & Security Settings',
+    profileSettingsSubtitle: 'Manage personal profile, role permissions, active sessions, and security logs',
+    tabProfile: 'Personal Profile',
+    tabSecurity: 'Security & Password',
+    tabAudit: 'Audit History',
+    phone: 'Phone Number',
+    preferredLanguage: 'Language Preference',
+    saveProfileChanges: 'Save Profile Changes',
+    userManagementTitle: 'User Accounts & Security Governance',
+    suspendAccount: 'Suspend Account',
+    activateAccount: 'Re-activate Account',
+    invitationManagementTitle: 'Tenant Invitations Registry',
+    generateInviteCode: 'Generate New Tenant Invite',
+
+    // Common Actions
+    save: 'Save',
+    cancel: 'Cancel',
+    close: 'Close',
+    submit: 'Submit',
+    delete: 'Delete',
+    edit: 'Edit',
+    loading: 'Loading...'
+  },
+  zh: {
+    // App Branding
+    appName: '小房东租赁管理助手',
+    appSubtitle: '专为管理 1–10 套出租房打造的轻量级租赁管理与合规系统',
+    
+    // Roles & Portals
+    landlordPortal: '房东门户',
+    tenantPortal: '租客门户',
+    adminPortal: '平台管理与合规',
+    switchRole: '切换身份视角',
+    currentRole: '当前身份',
+    
+    // Navigation
+    navDashboard: '仪表盘',
+    navAnalytics: '实时数据分析',
+    navProperties: '房源与单元',
+    navLeases: '租约与租客',
+    navRentLedger: '租金分类账',
+    navMaintenance: '维修工单',
+    navTasks: '任务管理',
+    navInspections: '检查与照片取证',
+    navMessages: '站内沟通',
+    navLegalResources: '租赁法规资源',
+    navDocuments: '文件资料库',
+    navAdmin: '平台管理',
+    
+    // Tenant Navigation
+    navTenantHome: '我的住所',
+    navTenantLease: '我的租约',
+    navTenantRent: '租金与支付',
+    navTenantMaintenance: '提交维修申请',
+    navTenantMessages: '联系房东',
+    navTenantInspection: '入住退租检查',
+    navTenantRights: '租客权利指南',
+
+    // Dashboard KPIs
+    kpiTotalUnits: '出租单元总数',
+    kpiOccupied: '已出租',
+    kpiVacant: '空置单元',
+    kpiRentDue: '10月应收租金',
+    kpiRentCollected: '本月实收租金',
+    kpiOutstanding: '未结未付余额',
+    kpiOpenRepairs: '待处理维修',
+    kpiExpiringLeases: '近期到期 (30-60天)',
+    kpiNetCashflow: '净经营现金流',
+    
+    // Quick Actions
+    quickActions: '快捷操作',
+    actionAddProperty: '新建物业',
+    actionRecordRent: '登记收款',
+    actionNewRepair: '新建维修单',
+    actionInspection: '开展房屋检查',
+    actionSimulateEvent: '模拟实时事件',
+    
+    // Recent Activity
+    recentActivity: '最近动态与操作',
+    viewAll: '查看全部',
+    
+    // Realtime Analytics
+    analyticsTitle: '资产组合实时分析引擎',
+    analyticsSubtitle: '实时数据监控：现金流波动、收租速度、维修周转时效及出租率动态',
+    collectionRate: '当月租金收缴率',
+    sixMonthRevenue: '近 6 个月租金收入与维修支出走势',
+    expenseBreakdown: '经营性维修支出分类占比',
+    turnaroundTime: '工单平均解决用时',
+    daysUnit: '天',
+    liveEventSimulation: '实时数据流模拟器',
+    simulateRentReceipt: '模拟收到租金 (+$1,850)',
+    simulateMaintenanceTicket: '模拟新增紧急工单',
+    portfolioStateSpread: '各州房源资产分布',
+    
+    // Property Management
+    addPropertyModalTitle: '添加出租物业',
+    propertyName: '物业名称',
+    address: '街道地址',
+    city: '城市',
+    state: '所在州 / 司法辖区',
+    county: '县 / 郡 (County)',
+    zip: '邮政编码',
+    propertyType: '建筑类型',
+    unitsCount: '出租单元数量',
+    yearBuilt: '建造年份',
+    bedrooms: '卧室数',
+    bathrooms: '卫生间数',
+    sqft: '室内面积 (sqft)',
+    monthlyRent: '月租金',
+    securityDeposit: '租赁押金',
+    occupancyStatus: '出租状态',
+    statusOccupied: '已出租',
+    statusVacant: '空置中',
+    statusMaintenance: '维修中',
+    statusInactive: '停用',
+    appliances: '配备家电与设施',
+    singleFamily: '独栋住宅 (Single Family)',
+    townhouse: '联排 / 双拼 (Townhouse/Duplex)',
+    apartment: '公寓 (Apartment)',
+    multiFamily: '多单元住宅 (Multi-Family)',
+    condo: '共管公寓 (Condo)',
+    
+    // Rent Ledger
+    rentLedgerTitle: '租金跟踪与分类账',
+    rentLedgerSubtitle: '合规跟踪月度应收、实收与调整记录。手工登记的款项明确标注为“房东申报”，非银行到账证明。',
+    landlordReportedBadge: '房东申报 (Landlord-Reported)',
+    recordPaymentBtn: '登记收款',
+    addAdjustmentBtn: '账目调整',
+    exportCsvBtn: '导出 CSV',
+    generateStatementBtn: '生成月度账单',
+    printReceiptBtn: '打印收据',
+    chargeDate: '账单月份',
+    tenant: '租客',
+    unit: '单元',
+    expectedAmount: '应收租金',
+    receivedAmount: '已收款项',
+    balance: '未收余额',
+    paymentMethod: '支付方式',
+    paymentSource: '数据来源',
+    bankTransfer: '银行转账 (ACH)',
+    check: '支票 (Check)',
+    zelle: 'Zelle / 电子支付',
+    cash: '现金 (Cash)',
+    creditCard: '信用卡',
+    partialPaymentWarning: '已记录部分付款',
+    
+    // Maintenance
+    maintenanceTitle: '维修申请与工单管理',
+    maintenanceSubtitle: '租客提交、房东审核、指定维修师傅、成本核算到完工拍照归档全流程。',
+    emergencyNoticeTitle: '紧急情况重要声明：漏水、燃气泄漏或火灾',
+    emergencyNoticeBody: '本应用无法替代 911 紧急救援或公用事业事故报警电话。如遇生命威胁、火警、强烈燃气味或建筑坍塌危险，请立即拨打 911 并撤离到安全区域。',
+    ticketStatusSubmitted: '租客提交',
+    ticketStatusReviewed: '房东审核',
+    ticketStatusInProgress: '维修中',
+    ticketStatusCompleted: '已完成',
+    ticketStatusClosed: '已关闭',
+    priorityEmergency: '紧急 (Emergency)',
+    priorityHigh: '高优先级',
+    priorityMedium: '普通',
+    priorityLow: '次要',
+    assignedVendor: '维修人员 / 承包商',
+    estimatedCost: '预估费用',
+    actualCost: '实际支出',
+    completionPhotos: '完工验收照片',
+    resolutionNotes: '解决说明与备注',
+    markCompleted: '标记为完工',
+    
+    // Inspections & Photo Evidence
+    inspectionsTitle: '入住与退租房屋检查 · 照片取证',
+    inspectionsSubtitle: '合规证据链系统：不可篡改的服务器时间戳、SHA-256 照片哈希校验、入住与退租并排比对。',
+    inspectionDisclaimer: '法律声明：本系统记录客观照片状态与双方确认时间戳。正常磨损与潜在损坏为人为标注，不直接构成法庭或法定赔偿责任判定。',
+    moveIn: '入住检查 (Move-In)',
+    moveOut: '退租检查 (Move-Out)',
+    compareMoveInOut: '并排对比入住与退租照片',
+    sha256Verification: 'SHA-256 证据哈希',
+    serverTimestamp: '服务器接收时间',
+    exifInfo: 'EXIF 拍摄元数据',
+    roomCategory: '检查区域 / 物品',
+    condition: '完好状况',
+    excellent: '极佳 (Excellent)',
+    good: '良好 (Good)',
+    fair: '一般 / 正常磨损 (Fair)',
+    damaged: '有损坏 / 需追查 (Damaged)',
+    landlordSignOff: '房东确认签名',
+    tenantSignOff: '租客确认签名',
+    signed: '已电子签署并锁定',
+    pendingSignature: '待租客确认签名',
+    exportPdfReport: '导出 PDF 检查报告',
+    
+    // Messaging
+    messagingTitle: '租客沟通与留痕',
+    messagingSubtitle: '房东与租客间的安全站内沟通，支持关联维修工单与图片附件传输。',
+    sendMsgPlaceholder: '输入消息内容...',
+    attachPhoto: '上传照片',
+    attachPdf: '上传 PDF / 通知文件',
+    sendMessage: '发送',
+    linkedTicket: '关联工单',
+    
+    // Legal Resources Center
+    legalCenterTitle: '美国 50 州与地方租赁法规资源中心',
+    legalCenterSubtitle: '汇集联邦、州及地方官方机构法条、法院诉讼指南、法定强制披露与最新法规。',
+    legalDisclaimerHeader: '法律信息与合规参考声明',
+    legalDisclaimerText: '本资源中心仅供房东与租客查询各级政府官方法规、官方披露文本与司法指引，属于法律信息与合规参考工具，不构成执业律师出具的正式法律意见。美国各州、县、市法规更新频繁，遇有争议请咨询当地持牌律师。',
+    searchPlaceholder: '搜索州法规、押金期限、含铅油漆披露、驱逐流程...',
+    filterByState: '按州筛选',
+    filterByTopic: '法规类别',
+    allTopics: '全部 12 类法规',
+    allStates: '全美 50 州 + 华盛顿特区',
+    verifiedBadge: '官方核实',
+    pendingReviewBadge: '待复核',
+    archivedBadge: '历史归档',
+    viewOfficialSite: '访问官方政府原文',
+    bookmarkResource: '收藏法条',
+    verifiedOn: '核实日期',
+    effectiveDate: '生效日期',
+    agency: '发布机构',
+    
+    // Tasks
+    tasksTitle: '物业待办与日程提醒',
+    filterAll: '全部任务',
+    filterToday: '今日到期',
+    filterOverdue: '已逾期',
+    filterNext7Days: '未来 7 天',
+    statusTodo: '待办',
+    statusInProg: '进行中',
+    statusBlocked: '受阻',
+    statusDone: '已完成',
+    addNewTask: '新建任务',
+    
+    // Admin & Subscription
+    adminTitle: '平台运营与 SaaS 订阅管理',
+    adminSubtitle: '多租户管理、Stripe 订阅套餐计费、单元上限控制及操作审计日志。',
+    adminNotice: '隐私与权限隔离保障：系统受安全机制保护，平台管理员无法在常规管理界面随意查看租客私密聊天、原始租约或房屋取证原图。',
+    plansTitle: '个人房东订阅套餐方案',
+    freeTrial: '免费试用',
+    starterPlan: '入门版 (Starter)',
+    standardPlan: '标准版 (Standard)',
+    plusPlan: '增强版 (Plus)',
+    unitsMax: '单元数上限',
+    monthly: '/月',
+    activeSubscribers: '当前订阅房东',
+    currentEnforcedPlan: '当前适用方案',
+    auditLogsTitle: '不可篡改审计日志',
+    
+    // Version 1.2 Authentication & User Management
+    landingHeroTitle: 'Rental Management Made Simple',
+    landingHeroSubtitle: '轻松管理出租房、租金、维修及租客沟通 · 专为 1–10 套出租房打造',
+    landingLandlordCardTitle: 'Landlord / 房东',
+    landingLandlordCardDesc: '管理出租物业、收租分类账、租约及维修工单。',
+    landingLandlordBtn: 'Register / 注册',
+    landingTenantCardTitle: 'Tenant / 租客',
+    landingTenantCardDesc: '查验租约、在线付租、提交报修与房东沟通。',
+    landingTenantBtn: 'Join / 加入',
+    landingAlreadyHaveAccount: 'Login / 已有账户？登录',
+    landingAdminNotice: 'Administrator access is managed separately / 管理员账户由平台安全创建',
+    landingDemoQuickAccess: '沙盒演示快速体验通道（一键体验全部角色）',
+
+    // Landlord Register
+    landlordRegTitle: 'Create Landlord Account / 创建房东账户',
+    landlordRegSubtitle: 'Start managing your rental properties / 开始管理您的出租房产',
+    fullName: '姓名 / Full Name',
+    emailAddress: '电子邮箱 / Email Address',
+    password: '登录密码 / Password',
+    confirmPassword: '确认密码 / Confirm Password',
+    showPasswords: '显示明文密码',
+    agreeTerms: '我同意服务条款与隐私政策 (Terms of Service and Privacy Policy)',
+    createAccount: '创建账户 / Create Account',
+    passwordRequirement: '密码至少需 8 个字符，且同时包含英文字母与数字',
+    passwordsDoNotMatch: '两次输入的密码不一致',
+    termsRequired: '请勾选同意服务条款与隐私政策',
+    emailAlreadyRegistered: '如该邮箱已存在，系统已向该地址发送安全通知，避免信息泄露。',
+
+    // Tenant Register & Invite
+    tenantRegTitle: 'Tenant Registration / 租客注册',
+    tenantRegSubtitle: 'Join your landlord\'s property / 接受房东邀请加入物业',
+    invitationCode: '邀请码 / Invitation Code',
+    invitationCodePlaceholder: '例如：SLA-7842-ELM',
+    activateTenantAccount: '激活租客账户 / Activate Tenant Account',
+    invalidInvitationCode: '邀请码无效或已过期，请联系房东重新生成邀请。',
+    matchedUnitInfo: '匹配的物业与出租单元',
+    invitationAcceptedSuccess: '租客账户激活成功！已自动关联对应单元与租约。',
+    landlordInviteTenantBtn: '生成租客邀请码 (Invite Tenant)',
+    invitationStatusPending: '待激活',
+    invitationStatusAccepted: '已激活',
+    invitationStatusExpired: '已过期',
+
+    // Unified Login
+    loginTitle: 'Welcome Back / 欢迎回来',
+    loginSubtitle: 'Sign in to Small Landlord Assistant / 登录小房东租赁管理助手',
+    selectPortal: '访问门户 / Portal',
+    portalLandlord: 'Landlord / 房东',
+    portalTenant: 'Tenant / 租客',
+    portalAdmin: 'Admin / 管理员',
+    signIn: '登录 / Sign In',
+    forgotPassword: '忘记密码？',
+    rememberMe: '在此浏览器记住登录状态',
+    secureAuthBadge: '严格 RBAC 权限隔离与安全认证',
+    demoLogins: '预置演示账户一键快速登录',
+    demoLandlordBtn: '房东 (David Miller - 5套单元)',
+    demoTenantBtn: '租客 (Emily Zhang - 2B单元)',
+    demoAdminBtn: '平台管理员 (Sarah Lin - 需MFA)',
+    demoMultiRoleBtn: '多重身份用户 (Alex Wong - 房东兼租客)',
+    accountSuspendedNotice: '您的账户因安全策略已被暂停访问，请联系管理员协助处理。',
+    emailUnverifiedNotice: '您的邮箱尚未完成验证，请点击下方进行邮箱验证。',
+    invalidCredentials: '邮箱或密码不正确，请重新输入。',
+    signOut: '退出登录',
+
+    // MFA
+    mfaTitle: '双重安全身份验证 (MFA Verification)',
+    mfaSubtitle: '平台管理员受控特权登录，强制要求输入 6 位动态验证码',
+    mfaCodeLabel: '6 位安全验证码',
+    mfaVerifyBtn: '验证并进入管理控制台',
+    mfaDemoHint: '演示环境动态验证码：123456',
+    mfaCodeInvalid: '验证码不正确。演示测试可输入 123456。',
+
+    // Role Switcher
+    roleSwitcherTitle: '请选择要访问的门户',
+    roleSwitcherSubtitle: '当前账户拥有多种已验证角色，请选择本次要进入的工作台：',
+    enterAsLandlord: '进入房东管理工作台',
+    enterAsTenant: '进入租客服务门户',
+    enterAsAdmin: '进入平台监管中心',
+
+    // Password Reset & Verification
+    resetPasswordTitle: '重置账户密码',
+    resetPasswordSubtitle: '输入注册邮箱，获取一次性密码重置令牌',
+    sendResetLink: '发送重置邮件',
+    resetTokenLabel: '一次性重置令牌',
+    newPasswordLabel: '新密码',
+    updatePasswordBtn: '确认修改并登录',
+    resetEmailSent: '重置邮件已模拟发送，请在下方查看生成的重置令牌：',
+    passwordResetSuccess: '密码修改成功！请使用新密码登录。',
+    emailVerificationTitle: '验证您的注册邮箱',
+    emailVerificationSubtitle: '系统已向您的邮箱发送了验证确认通知',
+    simulateEmailVerifyBtn: '模拟立即完成邮箱验证',
+    emailVerifiedSuccess: '邮箱已成功完成验证！现在即可畅享全部系统功能。',
+
+    // Profile Settings
+    profileSettingsTitle: '个人资料与安全设置',
+    profileSettingsSubtitle: '管理个人基本信息、角色权限、登录会话与操作安全审计',
+    tabProfile: '个人信息',
+    tabSecurity: '密码与双重验证',
+    tabAudit: '个人安全日志',
+    phone: '联系电话',
+    preferredLanguage: '界面语言偏好',
+    saveProfileChanges: '保存个人信息',
+    userManagementTitle: '用户管理与权限安全控制',
+    suspendAccount: '暂停该用户',
+    activateAccount: '恢复正常使用',
+    invitationManagementTitle: '租客邀请码管理',
+    generateInviteCode: '生成新租客邀请码',
+
+    // Common Actions
+    save: '保存',
+    cancel: '取消',
+    close: '关闭',
+    submit: '提交',
+    delete: '删除',
+    edit: '编辑',
+    loading: '加载中...'
+  }
+};
+
+const I18nContext = createContext<I18nContextType>({
+  lang: 'zh',
+  setLang: () => {},
+  t: (key: string, def?: string) => def || key,
+});
+
+export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [lang, setLangState] = useState<Language>(() => {
+    const saved = localStorage.getItem('sla_lang');
+    return (saved === 'en' || saved === 'zh') ? saved : 'zh';
+  });
+
+  const setLang = (newLang: Language) => {
+    setLangState(newLang);
+    localStorage.setItem('sla_lang', newLang);
+  };
+
+  const t = (key: string, defaultText?: string): string => {
+    if (translations[lang] && translations[lang][key]) {
+      return translations[lang][key];
+    }
+    if (translations.en && translations.en[key]) {
+      return translations.en[key];
+    }
+    return defaultText || key;
+  };
+
+  return (
+    <I18nContext.Provider value={{ lang, setLang, t }}>
+      {children}
+    </I18nContext.Provider>
+  );
+};
+
+export const useI18n = () => useContext(I18nContext);
