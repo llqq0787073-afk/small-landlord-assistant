@@ -5,7 +5,11 @@
 A real, local backend for the previously front-end-only demo:
 
 - **Server:** Node + Express (`server/index.js`)
-- **Database:** SQLite file via Node's built-in `node:sqlite` (`data/app.db`, git-ignored)
+- **Database:** PostgreSQL via the `pg` driver, connection from `DATABASE_URL`
+  only (works with a local Postgres or Supabase Postgres; SSL is enabled
+  automatically for `supabase.co` hosts). Startup runs a schema collision
+  guard: a same-named table with an incompatible schema is dropped and
+  recreated only if empty — never if it holds data.
 - **Auth:** bcryptjs password hashes + JWT (`jsonwebtoken`)
 - **Frontend:** Vite + React, proxied to the backend (`/api` → `http://localhost:3011`)
 
@@ -16,7 +20,7 @@ Nothing in this phase deploys to any cloud, and no real secret is committed.
 
 ```bash
 # 1) Backend (port 3011 by default)
-cp .env.example .env   # then set JWT_SECRET to a long random value
+cp .env.example .env   # then set JWT_SECRET and DATABASE_URL
 npm run server
 
 # 2) Frontend (port 3000, proxies /api to 3011)
@@ -31,7 +35,9 @@ Environment variables (names only, no values here):
 - `JWT_SECRET` — required in production; a dev fallback is used only if unset, with a warning
 - `JWT_EXPIRES_IN` — default `24h`
 - `PORT` — backend port, default `3011`
-- `DATABASE_PATH` — default `data/app.db`
+- `DATABASE_URL` — **required**; Postgres connection string
+  (e.g. `postgresql://user:pass@host:5432/db` or a Supabase connection string).
+  The server exits immediately if it is unset.
 - `DEMO_PASSWORD` — demo seed accounts only, on first DB creation
 
 ## Demo accounts (seeded once, only when the DB is empty)

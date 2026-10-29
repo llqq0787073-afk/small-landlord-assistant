@@ -1,20 +1,51 @@
-// SQLite persistence layer (Node built-in node:sqlite, no native add-on).
-// Database file: DATABASE_PATH env or ./data/app.db
+// Postgres persistence layer (node-postgres `pg`, async).
+// Connection comes ONLY from the DATABASE_URL environment variable
+// (e.g. postgresql://user:pass@host:5432/db or a Supabase connection
+// string). The server refuses to start without it.
+// SSL is enabled automatically for Supabase hosts (or PGSSL=require).
 // Seed data (server/seed.json, derived from the old frontend demo seed) is
-// imported ONLY when the users table is empty. Deleting data/app.db therefore
-// restores the demo portfolio once; it never overwrites existing user data.
-import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync, readFileSync, existsSync } from 'node:fs';
+// imported ONLY when the users table is empty. It never overwrites
+// existing user data.
+//
+// Startup collision guard: the target database may already contain
+// same-named tables (properties, tenancies, rent_charges, rent_payments,
+// maintenance_tickets, inspections, messages, conversations, audit_logs,
+// account_members, landlord_accounts, platform_admins, ...) with a
+// DIFFERENT schema (e.g. a relational Supabase schema). For every table this
+// file defines we compare information_schema.columns against our expected
+// columns: an incompatible but EMPTY table is dropped and recreated with our
+// definition (loud warning); an incompatible NON-EMPTY table aborts startup
+// with an actionable error. We never silently continue and never auto-drop a
+// table that holds data.
+import dotenv from 'dotenv';
+import pg from 'pg';
+import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import bcrypt from 'bcryptjs';
 import { createHash } from 'node:crypto';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const dbPath = process.env.DATABASE_PATH || join(__dirname, '..', 'data', 'app.db');
-mkdirSync(dirname(dbPath), { recursive: true });
+dotenv.config();
 
-export const db = new DatabaseSync(dbPath);
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+if (!process.env.DATABASE_URL) {
+  console.error('[server] FATAL: DATABASE_URL is not set. Set it to a Postgres connection string (e.g. postgresql://user:pass@host:5432/db) and restart.');
+  process.exit(1);
+}
+
+const useSsl = (process.env.DATABASE_URL || '').includes('supabase.co') || process.env.PGSSL === 'require';
+export const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+  ...(useSsl ? { ssl: { rejectUnauthorized: false } } : {}),
+});
+
+// Raw parameterized query helper for index.js (values are always bound via
+// $1, $2, ... — never interpolated into the SQL text).
+export async function q(text, params = []) {
+  const { rows } = await pool.query(text, params);
+  return rows;
+}
 
 export function todayStr(d = new Date()) {
   return d.toISOString().slice(0, 10);
@@ -35,54 +66,65 @@ const P = (v, fallback) => {
   try { return JSON.parse(v); } catch { return fallback; }
 };
 
-db.exec(`
-CREATE TABLE IF NOT EXISTS users (
+// ---- Schema ----------------------------------------------------------------
+const DDL = {
+  users: `CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE,
   password_hash TEXT, role TEXT NOT NULL, roles TEXT NOT NULL DEFAULT '[]',
   phone TEXT DEFAULT '', preferred_language TEXT DEFAULT 'zh',
   unit_id TEXT, property_id TEXT, status TEXT DEFAULT 'active',
   email_verified INTEGER DEFAULT 0, mfa_enabled INTEGER DEFAULT 0,
   created_at TEXT, last_login_at TEXT
-);
-CREATE TABLE IF NOT EXISTS landlord_accounts (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS account_members (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS tenancy_members (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS tenant_invitations (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS platform_admins (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS auth_audit_events (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS properties (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS units (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS tenancies (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS rent_charges (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS rent_payments (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS ledger_adjustments (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS maintenance_tickets (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS inspections (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS conversations (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS messages (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS documents (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS audit_logs (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS subscription_plans (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS email_verifications (
+)`,
+  email_verifications: `CREATE TABLE IF NOT EXISTS email_verifications (
   id TEXT PRIMARY KEY, email TEXT NOT NULL, token_hash TEXT NOT NULL,
   expires_at TEXT NOT NULL, used INTEGER DEFAULT 0, created_at TEXT
-);
-CREATE TABLE IF NOT EXISTS password_resets (
+)`,
+  password_resets: `CREATE TABLE IF NOT EXISTS password_resets (
   id TEXT PRIMARY KEY, email TEXT NOT NULL, token_hash TEXT NOT NULL,
   expires_at TEXT NOT NULL, used INTEGER DEFAULT 0, created_at TEXT
-);
-CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
-`);
+)`,
+  meta: `CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)`,
+};
+// Document tables: full object stored as JSON in `data`, keyed by `id`.
+const DOC_TABLES = [
+  'landlord_accounts', 'account_members', 'tenancy_members', 'tenant_invitations',
+  'platform_admins', 'auth_audit_events', 'properties', 'units', 'tenancies',
+  'rent_charges', 'rent_payments', 'ledger_adjustments', 'maintenance_tickets',
+  'tasks', 'inspections', 'conversations', 'messages', 'documents', 'audit_logs',
+  'subscription_plans',
+];
+for (const t of DOC_TABLES) {
+  DDL[t] = `CREATE TABLE IF NOT EXISTS ${t} (id TEXT PRIMARY KEY, data TEXT NOT NULL)`;
+}
 
-function tableRows(table) {
-  return db.prepare(`SELECT data FROM ${table}`).all().map((r) => P(r.data, null)).filter(Boolean);
+// Expected columns per table, used by the startup collision guard.
+const TABLE_COLUMNS = {
+  users: ['id', 'name', 'email', 'password_hash', 'role', 'roles', 'phone', 'preferred_language', 'unit_id', 'property_id', 'status', 'email_verified', 'mfa_enabled', 'created_at', 'last_login_at'],
+  email_verifications: ['id', 'email', 'token_hash', 'expires_at', 'used', 'created_at'],
+  password_resets: ['id', 'email', 'token_hash', 'expires_at', 'used', 'created_at'],
+  meta: ['key', 'value'],
+};
+for (const t of DOC_TABLES) TABLE_COLUMNS[t] = ['id', 'data'];
+
+// Table names interpolated into SQL below always come from the fixed
+// DOC_TABLES allowlist (never from user input).
+function assertDocTable(table) {
+  if (!DOC_TABLES.includes(table)) throw new Error(`[server] unknown document table: ${table}`);
 }
-function upsert(table, obj) {
-  db.prepare(`INSERT INTO ${table} (id, data) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET data=excluded.data`).run(obj.id, J(obj));
+
+async function tableRows(table) {
+  assertDocTable(table);
+  const rows = await q(`SELECT data FROM "${table}"`);
+  return rows.map((r) => P(r.data, null)).filter(Boolean);
 }
-function remove(table, id) {
-  db.prepare(`DELETE FROM ${table} WHERE id=?`).run(id);
+async function upsert(table, obj) {
+  assertDocTable(table);
+  await q(`INSERT INTO "${table}" (id, data) VALUES ($1, $2) ON CONFLICT(id) DO UPDATE SET data=EXCLUDED.data`, [obj.id, J(obj)]);
+}
+async function remove(table, id) {
+  assertDocTable(table);
+  await q(`DELETE FROM "${table}" WHERE id=$1`, [id]);
 }
 
 export function publicUser(u) {
@@ -96,53 +138,55 @@ export function publicUser(u) {
     createdAt: u.created_at, lastLoginAt: u.last_login_at,
   };
 }
-export function getUserByEmail(email) {
-  return db.prepare('SELECT * FROM users WHERE lower(email)=lower(?)').get(email) || null;
+export async function getUserByEmail(email) {
+  const rows = await q('SELECT * FROM users WHERE lower(email)=lower($1)', [email]);
+  return rows[0] || null;
 }
-export function getUserById(id) {
-  return db.prepare('SELECT * FROM users WHERE id=?').get(id) || null;
+export async function getUserById(id) {
+  const rows = await q('SELECT * FROM users WHERE id=$1', [id]);
+  return rows[0] || null;
 }
-export function createUser(profile, passwordHash) {
-  db.prepare(`INSERT INTO users (id,name,email,password_hash,role,roles,phone,preferred_language,unit_id,property_id,status,email_verified,mfa_enabled,created_at,last_login_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-    profile.id, profile.name, profile.email.toLowerCase(), passwordHash, profile.role,
-    J(profile.roles || [profile.role]), profile.phone || '', profile.preferredLanguage || 'zh',
-    profile.unitId || null, profile.propertyId || null, profile.status || 'active',
-    profile.emailVerified ? 1 : 0, 0, profile.createdAt || new Date().toISOString(),
-    profile.lastLoginAt || null);
+export async function createUser(profile, passwordHash) {
+  await q(`INSERT INTO users (id,name,email,password_hash,role,roles,phone,preferred_language,unit_id,property_id,status,email_verified,mfa_enabled,created_at,last_login_at)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+    [profile.id, profile.name, profile.email.toLowerCase(), passwordHash, profile.role,
+      J(profile.roles || [profile.role]), profile.phone || '', profile.preferredLanguage || 'zh',
+      profile.unitId || null, profile.propertyId || null, profile.status || 'active',
+      profile.emailVerified ? 1 : 0, 0, profile.createdAt || new Date().toISOString(),
+      profile.lastLoginAt || null]);
   return getUserById(profile.id);
 }
-export function updateUser(id, patch) {
-  const u = getUserById(id);
+export async function updateUser(id, patch) {
+  const u = await getUserById(id);
   if (!u) return null;
   const next = { ...u, ...patch };
-  db.prepare(`UPDATE users SET name=?, phone=?, preferred_language=?, unit_id=?, property_id=?, status=?, email_verified=?, last_login_at=?, password_hash=? WHERE id=?`).run(
-    next.name, next.phone || '', next.preferred_language || 'zh', next.unit_id || null, next.property_id || null,
-    next.status, next.email_verified ? 1 : 0, next.last_login_at || null, next.password_hash, id);
+  await q(`UPDATE users SET name=$1, phone=$2, preferred_language=$3, unit_id=$4, property_id=$5, status=$6, email_verified=$7, last_login_at=$8, password_hash=$9 WHERE id=$10`,
+    [next.name, next.phone || '', next.preferred_language || 'zh', next.unit_id || null, next.property_id || null,
+      next.status, next.email_verified ? 1 : 0, next.last_login_at || null, next.password_hash, id]);
   return getUserById(id);
 }
 
-export function addAuthEvent(event) {
-  upsert('auth_audit_events', { id: event.id || `aev_${Date.now()}_${Math.floor(Math.random() * 1000)}`, ...event, timestamp: event.timestamp || new Date().toISOString() });
+export async function addAuthEvent(event) {
+  await upsert('auth_audit_events', { id: event.id || `aev_${Date.now()}_${Math.floor(Math.random() * 1000)}`, ...event, timestamp: event.timestamp || new Date().toISOString() });
 }
-export function addAuditLog(log) {
-  upsert('audit_logs', { id: log.id || `aud_${Date.now()}`, ...log, timestamp: log.timestamp || new Date().toISOString() });
+export async function addAuditLog(log) {
+  await upsert('audit_logs', { id: log.id || `aud_${Date.now()}`, ...log, timestamp: log.timestamp || new Date().toISOString() });
 }
 
-export function loadAll(user) {
+export async function loadAll(user) {
   const isAdmin = user.role === 'admin';
   const isTenant = user.role === 'tenant';
-  let properties = tableRows('properties');
-  let units = tableRows('units');
-  let tenancies = tableRows('tenancies');
-  let charges = tableRows('rent_charges').map((c) => ({ ...c, status: computeChargeStatus(c) }));
-  let payments = tableRows('rent_payments');
-  let tickets = tableRows('maintenance_tickets');
-  let tasks = tableRows('tasks');
-  let inspections = tableRows('inspections');
-  let conversations = tableRows('conversations');
-  let messages = tableRows('messages');
-  let documents = tableRows('documents');
+  let properties = await tableRows('properties');
+  let units = await tableRows('units');
+  let tenancies = await tableRows('tenancies');
+  let charges = (await tableRows('rent_charges')).map((c) => ({ ...c, status: computeChargeStatus(c) }));
+  let payments = await tableRows('rent_payments');
+  let tickets = await tableRows('maintenance_tickets');
+  let tasks = await tableRows('tasks');
+  let inspections = await tableRows('inspections');
+  let conversations = await tableRows('conversations');
+  let messages = await tableRows('messages');
+  let documents = await tableRows('documents');
   if (!isAdmin && !isTenant) {
     // Landlord isolation: a landlord only sees their own properties and the
     // records attached to them. Seed properties have no landlordId column,
@@ -177,32 +221,57 @@ export function loadAll(user) {
     messages = messages.filter((m) => convIds.has(m.conversationId));
     documents = documents.filter((d) => d.propertyId === pid || d.unitId === uid);
   }
+  const userRows = await q('SELECT * FROM users');
   return {
     currentUser: publicUser(user),
-    profiles: isAdmin ? db.prepare('SELECT * FROM users').all().map(publicUser) : [publicUser(user)],
-    landlordAccounts: tableRows('landlord_accounts'),
-    accountMembers: isAdmin ? tableRows('account_members') : tableRows('account_members').filter((m) => m.userId === user.id),
-    tenancyMembers: tableRows('tenancy_members').filter((m) => isAdmin || m.userId === user.id || !isTenant),
-    tenantInvitations: isAdmin || user.role === 'landlord' ? tableRows('tenant_invitations') : [],
-    platformAdmins: tableRows('platform_admins'),
-    authAuditEvents: isAdmin ? tableRows('auth_audit_events') : tableRows('auth_audit_events').filter((e) => e.userId === user.id),
+    profiles: isAdmin ? userRows.map(publicUser) : [publicUser(user)],
+    landlordAccounts: await tableRows('landlord_accounts'),
+    accountMembers: isAdmin ? await tableRows('account_members') : (await tableRows('account_members')).filter((m) => m.userId === user.id),
+    tenancyMembers: (await tableRows('tenancy_members')).filter((m) => isAdmin || m.userId === user.id || !isTenant),
+    tenantInvitations: isAdmin || user.role === 'landlord' ? await tableRows('tenant_invitations') : [],
+    platformAdmins: await tableRows('platform_admins'),
+    authAuditEvents: isAdmin ? await tableRows('auth_audit_events') : (await tableRows('auth_audit_events')).filter((e) => e.userId === user.id),
     properties, units, tenancies, rentCharges: charges, payments,
-    adjustments: tableRows('ledger_adjustments'),
+    adjustments: await tableRows('ledger_adjustments'),
     maintenanceTickets: tickets, tasks, inspections, conversations, messages,
     documents,
-    auditLogs: isAdmin ? tableRows('audit_logs') : tableRows('audit_logs'),
-    subscriptionPlans: tableRows('subscription_plans'),
+    auditLogs: isAdmin ? await tableRows('audit_logs') : await tableRows('audit_logs'),
+    subscriptionPlans: await tableRows('subscription_plans'),
     activePlanId: 'standard',
   };
 }
 
 export const store = {
-  get: (table, id) => tableRows(table).find((r) => r.id === id) || null,
+  get: async (table, id) => (await tableRows(table)).find((r) => r.id === id) || null,
   all: tableRows, upsert, remove,
 };
 
-function seedIfEmpty() {
-  const count = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
+// For every table we define, compare information_schema.columns against our
+// expected columns. Incompatible + EMPTY -> warn, drop, recreate.
+// Incompatible + NON-EMPTY -> abort startup (never auto-drop data).
+async function checkCollisions() {
+  for (const [table, expected] of Object.entries(TABLE_COLUMNS)) {
+    const colRows = await q(
+      `SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name=$1`,
+      [table]);
+    const actual = new Set(colRows.map((r) => r.column_name));
+    const missing = expected.filter((c) => !actual.has(c));
+    if (missing.length === 0) continue;
+    const cnt = (await q(`SELECT COUNT(*)::int AS n FROM "${table}"`))[0].n;
+    if (cnt === 0) {
+      console.warn(`[server] WARNING: table "${table}" exists with an incompatible schema (missing columns: ${missing.join(', ')}). It is EMPTY, so it will be dropped and recreated with the app's schema.`);
+      await q(`DROP TABLE "${table}"`);
+      await q(DDL[table]);
+    } else {
+      console.error(`[server] FATAL: table "${table}" already exists with an incompatible schema (missing columns: ${missing.join(', ')}) and contains ${cnt} row(s). Refusing to start rather than risk data loss.`);
+      console.error(`[server] FATAL: resolve this manually (rename the table, migrate its data, or empty it) and restart.`);
+      process.exit(1);
+    }
+  }
+}
+
+async function seedIfEmpty() {
+  const count = (await q('SELECT COUNT(*)::int AS n FROM users'))[0].n;
   if (count > 0) return;
   const seedPath = join(__dirname, 'seed.json');
   if (!existsSync(seedPath)) return;
@@ -210,11 +279,11 @@ function seedIfEmpty() {
   // Demo accounts only: password is set from DEMO_PASSWORD env, defaulting to
   // the documented local-demo password. This is NOT a production credential
   // and must be changed / removed before any shared deployment.
-  const demoHash = bcrypt.hashSync(process.env.DEMO_PASSWORD || 'DemoPass123', 10);
+  const demoHash = await bcrypt.hash(process.env.DEMO_PASSWORD || 'DemoPass123', 10);
   for (const p of seed.profiles) {
     // MFA is not implemented in phase 1: seed users start with MFA off so
     // there is no fake MFA backdoor. The MFA page explains this.
-    createUser({ ...p, mfaEnabled: false }, demoHash);
+    await createUser({ ...p, mfaEnabled: false }, demoHash);
   }
   const map = [
     ['landlord_accounts', seed.landlordAccounts], ['account_members', seed.accountMembers],
@@ -227,12 +296,19 @@ function seedIfEmpty() {
     ['messages', seed.messages], ['documents', seed.documents],
     ['audit_logs', seed.auditLogs], ['subscription_plans', seed.subscriptionPlans],
   ];
-  for (const [table, rows] of map) for (const r of rows || []) upsert(table, r);
+  for (const [table, rows] of map) for (const r of rows || []) await upsert(table, r);
   // Fix the seed's fake invitation hash: store a real SHA-256 of the code.
   for (const inv of seed.tenantInvitations || []) {
-    upsert('tenant_invitations', { ...inv, codeHash: createHash('sha256').update(inv.invitationCode).digest('hex') });
+    await upsert('tenant_invitations', { ...inv, codeHash: createHash('sha256').update(inv.invitationCode).digest('hex') });
   }
-  db.prepare("INSERT OR REPLACE INTO meta (key,value) VALUES ('seeded_at',?)").run(new Date().toISOString());
+  await q(`INSERT INTO meta (key,value) VALUES ($1,$2) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value`, ['seeded_at', new Date().toISOString()]);
   console.log('[server] Seeded demo data into empty database (demo users only).');
 }
-seedIfEmpty();
+
+export async function initDb() {
+  // node-postgres runs multiple statements in one simple-protocol query when
+  // no parameters are bound.
+  await q(Object.values(DDL).join(';\n'));
+  await checkCollisions();
+  await seedIfEmpty();
+}
