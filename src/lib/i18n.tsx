@@ -285,7 +285,7 @@ const translations: Record<Language, Record<string, string>> = {
     demoLogins: 'One-Click Fast Demo Logins',
     demoLandlordBtn: 'Landlord (David Miller - 5 Units)',
     demoTenantBtn: 'Tenant (Emily Zhang - Unit 2B)',
-    demoAdminBtn: 'Admin (Sarah Lin - MFA Enforced)',
+    demoAdminBtn: 'Admin (Sarah Lin)',
     demoMultiRoleBtn: 'Multi-Role User (Alex Wong - Landlord & Tenant)',
     accountSuspendedNotice: 'Your account is suspended by security policy. Contact administrator.',
     emailUnverifiedNotice: 'Please verify your email address before continuing.',
@@ -297,8 +297,8 @@ const translations: Record<Language, Record<string, string>> = {
     mfaSubtitle: 'Mandatory TOTP challenge for administrative access',
     mfaCodeLabel: '6-Digit Verification Code',
     mfaVerifyBtn: 'Verify & Access Admin Console',
-    mfaDemoHint: 'Demo TOTP code: 123456',
-    mfaCodeInvalid: 'Invalid 6-digit code. Try 123456 for demo.',
+    mfaDemoHint: 'MFA is not implemented in this phase.',
+    mfaCodeInvalid: 'Invalid code.',
 
     // Role Switcher
     roleSwitcherTitle: 'Select Destination Portal',
@@ -318,7 +318,7 @@ const translations: Record<Language, Record<string, string>> = {
     passwordResetSuccess: 'Password has been successfully updated. You may now log in.',
     emailVerificationTitle: 'Verify Your Email Address',
     emailVerificationSubtitle: 'We have dispatched an activation code to your email inbox',
-    simulateEmailVerifyBtn: 'Simulate Email Verification (Instant)',
+    simulateEmailVerifyBtn: 'Verify email with token',
     emailVerifiedSuccess: 'Email successfully verified! You may now access your account.',
 
     // Profile Settings
@@ -343,7 +343,24 @@ const translations: Record<Language, Record<string, string>> = {
     submit: 'Submit',
     delete: 'Delete',
     edit: 'Edit',
-    loading: 'Loading...'
+    loading: 'Loading...',
+
+    authAuditEvents: 'Auth Audit Events',
+    resendVerification: 'Resend verification token',
+    mfaNotImplemented: 'MFA is not implemented in this phase. Please sign in with a password.',
+    roleNotAssigned: 'This account does not have that role.',
+    overpaymentRejected: 'Payment exceeds the remaining balance.',
+    invalidVerificationToken: 'Invalid or expired verification token.',
+    invalidOrExpiredToken: 'Invalid or expired token.',
+    currentPasswordIncorrect: 'Current password is incorrect.',
+    cannotSuspendSelf: 'You cannot suspend your own account.',
+    cannotSuspendAdmin: 'Admin accounts cannot be suspended here.',
+    alreadySigned: 'This side has already signed.',
+    inspectionLocked: 'This inspection is locked after both sides signed.',
+    cannotSignForOtherRole: 'You can only sign your own side.',
+    invalidTicketTransition: 'That ticket status change is not allowed.',
+    attachmentUploadNotImplemented: 'Attachment upload is not implemented yet.',
+    apiError: 'Server request failed. Please try again.',
   },
   zh: {
     // App Branding
@@ -622,7 +639,7 @@ const translations: Record<Language, Record<string, string>> = {
     demoLogins: '预置演示账户一键快速登录',
     demoLandlordBtn: '房东 (David Miller - 5套单元)',
     demoTenantBtn: '租客 (Emily Zhang - 2B单元)',
-    demoAdminBtn: '平台管理员 (Sarah Lin - 需MFA)',
+    demoAdminBtn: '平台管理员 (Sarah Lin)',
     demoMultiRoleBtn: '多重身份用户 (Alex Wong - 房东兼租客)',
     accountSuspendedNotice: '您的账户因安全策略已被暂停访问，请联系管理员协助处理。',
     emailUnverifiedNotice: '您的邮箱尚未完成验证，请点击下方进行邮箱验证。',
@@ -634,8 +651,8 @@ const translations: Record<Language, Record<string, string>> = {
     mfaSubtitle: '平台管理员受控特权登录，强制要求输入 6 位动态验证码',
     mfaCodeLabel: '6 位安全验证码',
     mfaVerifyBtn: '验证并进入管理控制台',
-    mfaDemoHint: '演示环境动态验证码：123456',
-    mfaCodeInvalid: '验证码不正确。演示测试可输入 123456。',
+    mfaDemoHint: '本阶段未实现 MFA，无演示验证码。',
+    mfaCodeInvalid: '验证码不正确。',
 
     // Role Switcher
     roleSwitcherTitle: '请选择要访问的门户',
@@ -651,11 +668,11 @@ const translations: Record<Language, Record<string, string>> = {
     resetTokenLabel: '一次性重置令牌',
     newPasswordLabel: '新密码',
     updatePasswordBtn: '确认修改并登录',
-    resetEmailSent: '重置邮件已模拟发送，请在下方查看生成的重置令牌：',
+    resetEmailSent: '重置请求已处理，令牌不会在此页面显示。',
     passwordResetSuccess: '密码修改成功！请使用新密码登录。',
     emailVerificationTitle: '验证您的注册邮箱',
     emailVerificationSubtitle: '系统已向您的邮箱发送了验证确认通知',
-    simulateEmailVerifyBtn: '模拟立即完成邮箱验证',
+    simulateEmailVerifyBtn: '用令牌验证邮箱',
     emailVerifiedSuccess: '邮箱已成功完成验证！现在即可畅享全部系统功能。',
 
     // Profile Settings
@@ -680,7 +697,24 @@ const translations: Record<Language, Record<string, string>> = {
     submit: '提交',
     delete: '删除',
     edit: '编辑',
-    loading: '加载中...'
+    loading: '加载中...',
+
+    authAuditEvents: '认证审计事件',
+    resendVerification: '重新发送验证令牌',
+    mfaNotImplemented: '本阶段尚未实现 MFA，请用密码登录。',
+    roleNotAssigned: '该账号没有这个角色。',
+    overpaymentRejected: '付款金额超过剩余应收余额。',
+    invalidVerificationToken: '验证令牌无效或已过期。',
+    invalidOrExpiredToken: '令牌无效或已过期。',
+    currentPasswordIncorrect: '当前密码不正确。',
+    cannotSuspendSelf: '不能暂停自己的账号。',
+    cannotSuspendAdmin: '不能在此处暂停管理员账号。',
+    alreadySigned: '这一方已经签署过了。',
+    inspectionLocked: '双方签署后检查已锁定，不可再改。',
+    cannotSignForOtherRole: '只能签署自己的一方，不能替对方签。',
+    invalidTicketTransition: '该工单状态流转不被允许。',
+    attachmentUploadNotImplemented: '附件上传尚未实现。',
+    apiError: '服务器请求失败，请重试。',
   }
 };
 

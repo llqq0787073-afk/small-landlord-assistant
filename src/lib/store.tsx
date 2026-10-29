@@ -26,6 +26,7 @@ import {
   AuthEventType
 } from '../types';
 import { INITIAL_LEGAL_RESOURCES } from './legalResourcesData';
+import { api, getToken, setToken, ApiError } from './api';
 
 export interface AppState {
   currentRole: UserRole;
@@ -64,36 +65,38 @@ export interface AppState {
 interface AppContextType extends AppState {
   setCurrentRole: (role: UserRole) => void;
   setActiveRoute: (route: string) => void;
-  login: (email: string, password: string, portalRole?: UserRole) => { success: boolean; requiresMfa?: boolean; requiresRoleSelect?: boolean; error?: string; user?: UserProfile };
-  verifyMfaCode: (code: string) => { success: boolean; error?: string };
+  login: (email: string, password: string, portalRole?: UserRole) => Promise<{ success: boolean; requiresMfa?: boolean; requiresRoleSelect?: boolean; error?: string; user?: UserProfile }>;
+  verifyMfaCode: (code: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
-  registerLandlord: (name: string, email: string, password: string) => { success: boolean; error?: string };
-  verifyEmail: (email: string) => { success: boolean };
-  activateTenantInvitation: (code: string, name: string, email: string, password: string) => { success: boolean; unitInfo?: string; error?: string };
-  createTenantInvitation: (propertyId: string, unitId: string, tenancyId: string, email: string) => TenantInvitation;
-  requestPasswordReset: (email: string) => { success: boolean; token?: string; error?: string };
-  resetPasswordWithToken: (token: string, newPassword: string) => { success: boolean; error?: string };
-  switchActiveRole: (role: UserRole) => void;
-  updateUserProfile: (updates: Partial<UserProfile>) => void;
-  toggleUserSuspension: (userId: string) => void;
-  quickDemoLogin: (target: 'landlord' | 'tenant' | 'admin' | 'multi' | 'suspended') => void;
-  addProperty: (property: Omit<Property, 'id' | 'createdAt'>, unitDetails: { rent: number; deposit: number; bed: number; bath: number; sqft: number }) => void;
-  recordPayment: (payment: { unitId: string; tenancyId: string; chargeId: string; amount: number; method: RentPayment['method']; reference?: string; notes?: string }) => void;
-  addLedgerAdjustment: (chargeId: string, tenancyId: string, amount: number, reason: string) => void;
-  addMaintenanceTicket: (ticket: Omit<MaintenanceTicket, 'id' | 'ticketNumber' | 'submittedAt' | 'updatedAt'>) => void;
-  updateTicketStatus: (ticketId: string, status: MaintenanceTicket['status'], resolutionNotes?: string, actualCost?: number) => void;
-  addTask: (task: Omit<Task, 'id' | 'createdAt'>) => void;
-  toggleTaskStatus: (taskId: string) => void;
-  updateInspectionItem: (inspectionId: string, itemId: string, condition: Inspection['items'][0]['condition'], notes: string, category: Inspection['items'][0]['wearTearCategory']) => void;
-  signInspection: (inspectionId: string, signerRole: 'landlord' | 'tenant', signerName: string) => void;
-  sendMessage: (conversationId: string, text: string, attachmentName?: string, attachmentType?: 'image' | 'pdf') => void;
+  registerLandlord: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  verifyEmail: (email: string, token?: string) => Promise<{ success: boolean; error?: string }>;
+  resendVerification: (email: string) => Promise<void>;
+  activateTenantInvitation: (code: string, name: string, email: string, password: string) => Promise<{ success: boolean; unitInfo?: string; error?: string }>;
+  createTenantInvitation: (propertyId: string, unitId: string, tenancyId: string, email: string) => Promise<TenantInvitation | null>;
+  requestPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
+  resetPasswordWithToken: (token: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  switchActiveRole: (role: UserRole) => Promise<void>;
+  updateUserProfile: (updates: Partial<UserProfile>) => Promise<void>;
+  toggleUserSuspension: (userId: string) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  quickDemoLogin: (target: 'landlord' | 'tenant' | 'admin' | 'multi' | 'suspended') => Promise<void>;
+  addProperty: (property: Omit<Property, 'id' | 'createdAt'>, unitDetails: { rent: number; deposit: number; bed: number; bath: number; sqft: number }) => Promise<void>;
+  recordPayment: (payment: { unitId: string; tenancyId: string; chargeId: string; amount: number; method: RentPayment['method']; reference?: string; notes?: string }) => Promise<void>;
+  addLedgerAdjustment: (chargeId: string, tenancyId: string, amount: number, reason: string) => Promise<void>;
+  addMaintenanceTicket: (ticket: Omit<MaintenanceTicket, 'id' | 'ticketNumber' | 'submittedAt' | 'updatedAt'>) => Promise<void>;
+  updateTicketStatus: (ticketId: string, status: MaintenanceTicket['status'], resolutionNotes?: string, actualCost?: number) => Promise<void>;
+  addTask: (task: Omit<Task, 'id' | 'createdAt'>) => Promise<void>;
+  toggleTaskStatus: (taskId: string) => Promise<void>;
+  updateInspectionItem: (inspectionId: string, itemId: string, condition: Inspection['items'][0]['condition'], notes: string, category: Inspection['items'][0]['wearTearCategory']) => Promise<void>;
+  signInspection: (inspectionId: string, signerRole: 'landlord' | 'tenant', signerName: string) => Promise<void>;
+  sendMessage: (conversationId: string, text: string, attachmentName?: string, attachmentType?: 'image' | 'pdf') => Promise<void>;
   toggleBookmarkResource: (resourceId: string) => void;
-  simulateLiveRentEvent: () => void;
-  simulateLiveMaintenanceEvent: () => void;
+  simulateLiveRentEvent: () => Promise<void>;
+  simulateLiveMaintenanceEvent: () => Promise<void>;
   clearToast: () => void;
 }
 
-const DEMO_USERS: Record<UserRole, UserProfile> = {
+export const DEMO_USERS: Record<UserRole, UserProfile> = {
   landlord: {
     id: 'usr_landlord_1',
     name: 'David Miller',
@@ -140,7 +143,7 @@ const DEMO_USERS: Record<UserRole, UserProfile> = {
   }
 };
 
-const SEED_PROFILES: UserProfile[] = [
+export const SEED_PROFILES: UserProfile[] = [
   DEMO_USERS.landlord,
   DEMO_USERS.tenant,
   DEMO_USERS.admin,
@@ -184,7 +187,7 @@ const SEED_PROFILES: UserProfile[] = [
   }
 ];
 
-const SEED_LANDLORD_ACCOUNTS: LandlordAccount[] = [
+export const SEED_LANDLORD_ACCOUNTS: LandlordAccount[] = [
   {
     id: 'acct_miller_holdings',
     name: 'Miller Capital Real Estate LLC',
@@ -195,7 +198,7 @@ const SEED_LANDLORD_ACCOUNTS: LandlordAccount[] = [
   }
 ];
 
-const SEED_ACCOUNT_MEMBERS: AccountMember[] = [
+export const SEED_ACCOUNT_MEMBERS: AccountMember[] = [
   {
     id: 'acct_mem_1',
     accountId: 'acct_miller_holdings',
@@ -205,7 +208,7 @@ const SEED_ACCOUNT_MEMBERS: AccountMember[] = [
   }
 ];
 
-const SEED_TENANCY_MEMBERS: TenancyMember[] = [
+export const SEED_TENANCY_MEMBERS: TenancyMember[] = [
   {
     id: 'tmem_1',
     tenancyId: 'ten_2b',
@@ -226,7 +229,7 @@ const SEED_TENANCY_MEMBERS: TenancyMember[] = [
   }
 ];
 
-const SEED_TENANT_INVITATIONS: TenantInvitation[] = [
+export const SEED_TENANT_INVITATIONS: TenantInvitation[] = [
   {
     id: 'inv_austin_b_01',
     propertyId: 'prop_austin_condo',
@@ -260,7 +263,7 @@ const SEED_TENANT_INVITATIONS: TenantInvitation[] = [
   }
 ];
 
-const SEED_PLATFORM_ADMINS: PlatformAdmin[] = [
+export const SEED_PLATFORM_ADMINS: PlatformAdmin[] = [
   {
     id: 'padm_1',
     userId: 'usr_admin_1',
@@ -271,7 +274,7 @@ const SEED_PLATFORM_ADMINS: PlatformAdmin[] = [
   }
 ];
 
-const SEED_AUTH_AUDIT_EVENTS: AuthAuditEvent[] = [
+export const SEED_AUTH_AUDIT_EVENTS: AuthAuditEvent[] = [
   {
     id: 'aev_1',
     userId: 'usr_admin_1',
@@ -318,7 +321,7 @@ const SEED_AUTH_AUDIT_EVENTS: AuthAuditEvent[] = [
   }
 ];
 
-const SEED_PROPERTIES: Property[] = [
+export const SEED_PROPERTIES: Property[] = [
   {
     id: 'prop_elmwood',
     name: 'Elmwood Townhomes / 榆树林联排',
@@ -363,7 +366,7 @@ const SEED_PROPERTIES: Property[] = [
   }
 ];
 
-const SEED_UNITS: Unit[] = [
+export const SEED_UNITS: Unit[] = [
   {
     id: 'unit_1a',
     propertyId: 'prop_elmwood',
@@ -426,7 +429,7 @@ const SEED_UNITS: Unit[] = [
   }
 ];
 
-const SEED_TENANCIES: Tenancy[] = [
+export const SEED_TENANCIES: Tenancy[] = [
   {
     id: 'ten_1a',
     unitId: 'unit_1a',
@@ -497,7 +500,7 @@ const SEED_TENANCIES: Tenancy[] = [
   }
 ];
 
-const SEED_CHARGES: RentCharge[] = [
+export const SEED_CHARGES: RentCharge[] = [
   {
     id: 'chg_1a_oct',
     tenancyId: 'ten_1a',
@@ -548,7 +551,7 @@ const SEED_CHARGES: RentCharge[] = [
   }
 ];
 
-const SEED_PAYMENTS: RentPayment[] = [
+export const SEED_PAYMENTS: RentPayment[] = [
   {
     id: 'pay_1a_oct',
     tenancyId: 'ten_1a',
@@ -607,7 +610,7 @@ const SEED_PAYMENTS: RentPayment[] = [
   }
 ];
 
-const SEED_MAINTENANCE: MaintenanceTicket[] = [
+export const SEED_MAINTENANCE: MaintenanceTicket[] = [
   {
     id: 'tkt_001',
     ticketNumber: 'WO-2026-089',
@@ -672,7 +675,7 @@ const SEED_MAINTENANCE: MaintenanceTicket[] = [
   }
 ];
 
-const SEED_TASKS: Task[] = [
+export const SEED_TASKS: Task[] = [
   {
     id: 'tsk_1',
     title: 'Review Emily Zhang (Unit 2B) lease renewal terms / 审核 2B 单元续租方案',
@@ -725,7 +728,7 @@ const SEED_TASKS: Task[] = [
   }
 ];
 
-const SEED_INSPECTION: Inspection = {
+export const SEED_INSPECTION: Inspection = {
   id: 'insp_2b_movein',
   unitId: 'unit_2b',
   propertyId: 'prop_elmwood',
@@ -823,7 +826,7 @@ const SEED_INSPECTION: Inspection = {
   ]
 };
 
-const SEED_CONVERSATIONS: Conversation[] = [
+export const SEED_CONVERSATIONS: Conversation[] = [
   {
     id: 'conv_unit_2b',
     propertyId: 'prop_elmwood',
@@ -848,7 +851,7 @@ const SEED_CONVERSATIONS: Conversation[] = [
   }
 ];
 
-const SEED_MESSAGES: Message[] = [
+export const SEED_MESSAGES: Message[] = [
   {
     id: 'msg_1',
     conversationId: 'conv_unit_2b',
@@ -884,7 +887,7 @@ const SEED_MESSAGES: Message[] = [
   }
 ];
 
-const SEED_DOCUMENTS: DocumentItem[] = [
+export const SEED_DOCUMENTS: DocumentItem[] = [
   {
     id: 'doc_1',
     propertyId: 'prop_elmwood',
@@ -931,7 +934,7 @@ const SEED_DOCUMENTS: DocumentItem[] = [
   }
 ];
 
-const SEED_AUDIT_LOGS: AuditLog[] = [
+export const SEED_AUDIT_LOGS: AuditLog[] = [
   {
     id: 'aud_1',
     timestamp: '2026-10-18T09:30:15Z',
@@ -964,7 +967,7 @@ const SEED_AUDIT_LOGS: AuditLog[] = [
   }
 ];
 
-const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
+export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
   {
     id: 'free_trial',
     nameEn: '14-Day Free Trial',
@@ -1006,806 +1009,347 @@ const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
 
 const AppContext = createContext<AppContextType | null>(null);
 
+const EMPTY_USER: UserProfile = {
+  id: '', name: '', email: '', role: 'landlord', roles: [],
+  phone: '', preferredLanguage: 'zh', status: 'active', emailVerified: false, mfaEnabled: false,
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentRole, setCurrentRoleState] = useState<UserRole>('landlord');
-  const [currentUser, setCurrentUserState] = useState<UserProfile>(DEMO_USERS.landlord);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
-  const [activeRoute, setActiveRoute] = useState<string>('/landlord/dashboard');
-
-  // Authentication Database State (Profiles, Accounts, Tenancies, Invitations, Admins, Audit Events)
-  const [profiles, setProfiles] = useState<UserProfile[]>(SEED_PROFILES);
-  const [landlordAccounts, setLandlordAccounts] = useState<LandlordAccount[]>(SEED_LANDLORD_ACCOUNTS);
-  const [accountMembers, setAccountMembers] = useState<AccountMember[]>(SEED_ACCOUNT_MEMBERS);
-  const [tenancyMembers, setTenancyMembers] = useState<TenancyMember[]>(SEED_TENANCY_MEMBERS);
-  const [tenantInvitations, setTenantInvitations] = useState<TenantInvitation[]>(SEED_TENANT_INVITATIONS);
-  const [platformAdmins, setPlatformAdmins] = useState<PlatformAdmin[]>(SEED_PLATFORM_ADMINS);
-  const [authAuditEvents, setAuthAuditEvents] = useState<AuthAuditEvent[]>(SEED_AUTH_AUDIT_EVENTS);
-
-  // Auth flow states
+  const [currentUser, setCurrentUserState] = useState<UserProfile>(EMPTY_USER);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [activeRoute, setActiveRoute] = useState<string>('/');
+  const [profiles, setProfiles] = useState<UserProfile[]>([]);
+  const [landlordAccounts, setLandlordAccounts] = useState<LandlordAccount[]>([]);
+  const [accountMembers, setAccountMembers] = useState<AccountMember[]>([]);
+  const [tenancyMembers, setTenancyMembers] = useState<TenancyMember[]>([]);
+  const [tenantInvitations, setTenantInvitations] = useState<TenantInvitation[]>([]);
+  const [platformAdmins, setPlatformAdmins] = useState<PlatformAdmin[]>([]);
+  const [authAuditEvents, setAuthAuditEvents] = useState<AuthAuditEvent[]>([]);
   const [pendingMfaUser, setPendingMfaUser] = useState<UserProfile | null>(null);
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
-  const [activeResetToken, setActiveResetToken] = useState<{ email: string; token: string; expiresAt: string } | null>(null);
-
-  const [properties, setProperties] = useState<Property[]>(SEED_PROPERTIES);
-  const [units, setUnits] = useState<Unit[]>(SEED_UNITS);
-  const [tenancies, setTenancies] = useState<Tenancy[]>(SEED_TENANCIES);
-  const [rentCharges, setRentCharges] = useState<RentCharge[]>(SEED_CHARGES);
-  const [payments, setPayments] = useState<RentPayment[]>(SEED_PAYMENTS);
+  const [activeResetToken] = useState<{ email: string; token: string; expiresAt: string } | null>(null);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
+  const [tenancies, setTenancies] = useState<Tenancy[]>([]);
+  const [rentCharges, setRentCharges] = useState<RentCharge[]>([]);
+  const [payments, setPayments] = useState<RentPayment[]>([]);
   const [adjustments, setAdjustments] = useState<LedgerAdjustment[]>([]);
-  const [maintenanceTickets, setMaintenanceTickets] = useState<MaintenanceTicket[]>(SEED_MAINTENANCE);
-  const [tasks, setTasks] = useState<Task[]>(SEED_TASKS);
-  const [inspections, setInspections] = useState<Inspection[]>([SEED_INSPECTION]);
-  const [conversations, setConversations] = useState<Conversation[]>(SEED_CONVERSATIONS);
-  const [messages, setMessages] = useState<Message[]>(SEED_MESSAGES);
+  const [maintenanceTickets, setMaintenanceTickets] = useState<MaintenanceTicket[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [inspections, setInspections] = useState<Inspection[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [legalResources, setLegalResources] = useState<LegalResource[]>(INITIAL_LEGAL_RESOURCES);
-  const [documents, setDocuments] = useState<DocumentItem[]>(SEED_DOCUMENTS);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(SEED_AUDIT_LOGS);
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [subscriptionPlans] = useState<SubscriptionPlan[]>(SUBSCRIPTION_PLANS);
   const [activePlanId, setActivePlanId] = useState<string>('standard');
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'info' | 'warning' } | null>(null);
 
-  const logAuthEvent = (
-    eventType: AuthEventType,
-    actorEmail: string,
-    details: string,
-    userId?: string,
-    actorRole?: UserRole
-  ) => {
-    const newEvent: AuthAuditEvent = {
-      id: `aev_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-      userId,
-      actorEmail,
-      actorRole,
-      eventType,
-      ipAddress: '192.0.2.14',
-      userAgent: navigator.userAgent.slice(0, 80),
-      timestamp: new Date().toISOString(),
-      details
-    };
-    setAuthAuditEvents(prev => [newEvent, ...prev]);
+  const clearSession = () => {
+    setToken(null);
+    setIsAuthenticated(false);
+    setCurrentUserState(EMPTY_USER);
+    setCurrentRoleState('landlord');
+    setPendingMfaUser(null);
+    setPendingVerificationEmail(null);
+  };
+
+  const applyBootstrap = (data: any, role?: UserRole) => {
+    setCurrentUserState(data.currentUser);
+    setCurrentRoleState(role || data.currentUser.role);
+    setProfiles(data.profiles || []);
+    setLandlordAccounts(data.landlordAccounts || []);
+    setAccountMembers(data.accountMembers || []);
+    setTenancyMembers(data.tenancyMembers || []);
+    setTenantInvitations(data.tenantInvitations || []);
+    setPlatformAdmins(data.platformAdmins || []);
+    setAuthAuditEvents(data.authAuditEvents || []);
+    setProperties(data.properties || []);
+    setUnits(data.units || []);
+    setTenancies(data.tenancies || []);
+    setRentCharges(data.rentCharges || []);
+    setPayments(data.payments || []);
+    setAdjustments(data.adjustments || []);
+    setMaintenanceTickets(data.maintenanceTickets || []);
+    setTasks(data.tasks || []);
+    setInspections(data.inspections || []);
+    setConversations(data.conversations || []);
+    setMessages(data.messages || []);
+    setDocuments(data.documents || []);
+    setAuditLogs(data.auditLogs || []);
+    if (data.subscriptionPlans?.length) { /* plans are static in the frontend for phase 1 */ }
+    setActivePlanId(data.activePlanId || 'standard');
+  };
+
+  const refresh = async () => {
+    try {
+      const data = await api('/bootstrap');
+      applyBootstrap(data);
+    } catch (e) {
+      if (e instanceof ApiError && (e.status === 401 || e.status === 403)) {
+        clearSession();
+        setActiveRoute('/');
+      }
+    }
+  };
+
+  // Restore a previous session from the stored JWT, if any.
+  useEffect(() => {
+    if (!getToken()) return;
+    (async () => {
+      try {
+        const me = await api('/auth/me');
+        setCurrentUserState(me.user);
+        setCurrentRoleState(me.role);
+        setIsAuthenticated(true);
+        await refresh();
+        setActiveRoute(me.role === 'tenant' ? '/tenant/dashboard' : me.role === 'admin' ? '/admin/dashboard' : '/landlord/dashboard');
+      } catch {
+        clearSession();
+        setActiveRoute('/');
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const failToast = (e: unknown, fallback: string) => {
+    const msg = e instanceof ApiError ? (e.body?.error || fallback) : fallback;
+    setToastMessage({ text: String(msg), type: 'warning' });
+  };
+
+  const login = async (email: string, password: string, portalRole?: UserRole) => {
+    try {
+      const res = await api('/auth/login', { method: 'POST', body: JSON.stringify({ email, password, portalRole }) });
+      setToken(res.token);
+      setCurrentUserState(res.user);
+      setCurrentRoleState(res.role);
+      setIsAuthenticated(true);
+      setPendingMfaUser(null);
+      await refresh();
+      if (res.requiresRoleSelect) { setActiveRoute('/select-role'); return { success: true, requiresRoleSelect: true, user: res.user }; }
+      setActiveRoute(res.role === 'tenant' ? '/tenant/dashboard' : res.role === 'admin' ? '/admin/dashboard' : '/landlord/dashboard');
+      setToastMessage({ text: `Welcome back, ${res.user.name}!`, type: 'success' });
+      return { success: true, user: res.user };
+    } catch (e) {
+      if (e instanceof ApiError) {
+        if (e.body?.error === 'emailUnverifiedNotice') { setPendingVerificationEmail(e.body.pendingVerificationEmail || email); setActiveRoute('/verify-email'); }
+        return { success: false, error: e.body?.error || 'invalidCredentials' };
+      }
+      return { success: false, error: 'invalidCredentials' };
+    }
+  };
+
+  // MFA is not implemented in phase 1. This deliberately never grants access.
+  const verifyMfaCode = async (_code: string) => ({ success: false, error: 'mfaNotImplemented' });
+
+  const logout = () => {
+    api('/auth/logout', { method: 'POST' }).catch(() => {});
+    clearSession();
+    setProperties([]); setUnits([]); setTenancies([]); setRentCharges([]); setPayments([]);
+    setMaintenanceTickets([]); setTasks([]); setInspections([]); setConversations([]); setMessages([]);
+    setActiveRoute('/');
+    setToastMessage({ text: 'You have been signed out safely.', type: 'info' });
+  };
+
+  const registerLandlord = async (name: string, email: string, password: string) => {
+    try {
+      const res = await api('/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password }) });
+      setPendingVerificationEmail(res.pendingVerificationEmail || email.trim().toLowerCase());
+      setActiveRoute('/verify-email');
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e instanceof ApiError ? (e.body?.error || 'invalidInput') : 'invalidInput' };
+    }
+  };
+
+  const verifyEmail = async (email: string, token?: string) => {
+    if (!token) return { success: false, error: 'invalidVerificationToken' };
+    try {
+      const res = await api('/auth/verify-email', { method: 'POST', body: JSON.stringify({ email, token }) });
+      setToken(res.token);
+      setCurrentUserState(res.user);
+      setCurrentRoleState(res.user.role);
+      setIsAuthenticated(true);
+      setPendingVerificationEmail(null);
+      await refresh();
+      setActiveRoute('/landlord/dashboard');
+      setToastMessage({ text: 'Email verified successfully! Welcome to your Landlord Portal.', type: 'success' });
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e instanceof ApiError ? (e.body?.error || 'invalidVerificationToken') : 'invalidVerificationToken' };
+    }
+  };
+
+  const activateTenantInvitation = async (code: string, name: string, email: string, password: string) => {
+    try {
+      const res = await api('/auth/activate-invitation', { method: 'POST', body: JSON.stringify({ code, name, email, password }) });
+      setToken(res.token);
+      setCurrentUserState(res.user);
+      setCurrentRoleState('tenant');
+      setIsAuthenticated(true);
+      await refresh();
+      setActiveRoute('/tenant/dashboard');
+      setToastMessage({ text: `Tenant account activated! Linked to ${res.unitInfo}`, type: 'success' });
+      return { success: true, unitInfo: res.unitInfo };
+    } catch (e) {
+      return { success: false, error: e instanceof ApiError ? (e.body?.error || 'invalidInvitationCode') : 'invalidInvitationCode' };
+    }
+  };
+
+  const createTenantInvitation = async (propertyId: string, unitId: string, tenancyId: string, email: string) => {
+    try {
+      const res = await api('/invitations', { method: 'POST', body: JSON.stringify({ propertyId, unitId, tenancyId, email }) });
+      await refresh();
+      setToastMessage({ text: `Tenant invitation code ${res.invitation.invitationCode} generated successfully.`, type: 'success' });
+      return res.invitation as TenantInvitation;
+    } catch (e) { failToast(e, 'Failed to create invitation'); return null; }
+  };
+
+  const requestPasswordReset = async (email: string) => {
+    try { await api('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }); return { success: true }; }
+    catch (e) { return { success: false, error: e instanceof ApiError ? (e.body?.error || 'invalidInput') : 'invalidInput' }; }
+  };
+
+  const resetPasswordWithToken = async (token: string, newPassword: string) => {
+    try {
+      await api('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token, newPassword }) });
+      setToastMessage({ text: 'Password updated successfully! Please sign in with your new credentials.', type: 'success' });
+      setActiveRoute('/login');
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e instanceof ApiError ? (e.body?.error || 'invalidOrExpiredToken') : 'invalidOrExpiredToken' };
+    }
+  };
+
+  const switchActiveRole = async (role: UserRole) => {
+    try {
+      const res = await api('/auth/switch-role', { method: 'POST', body: JSON.stringify({ role }) });
+      setToken(res.token);
+      setCurrentRoleState(role);
+      setPendingMfaUser(null);
+      await refresh();
+      setActiveRoute(role === 'tenant' ? '/tenant/dashboard' : role === 'admin' ? '/admin/dashboard' : '/landlord/dashboard');
+      setToastMessage({ text: `Switched to ${role} portal`, type: 'info' });
+    } catch (e) { failToast(e, 'Role switch was rejected by the server'); }
   };
 
   const setCurrentRole = (role: UserRole) => {
-    setCurrentRoleState(role);
-    setToastMessage({
-      text: role === 'landlord'
-        ? 'Switched to Landlord View (David Miller - 5 Units)'
-        : role === 'tenant'
-        ? 'Switched to Tenant View (Emily Zhang - Unit 2B)'
-        : 'Switched to Platform Compliance Admin View',
-      type: 'info'
-    });
+    // Never trust the navbar alone: the server validates roles.
+    if (currentUser.id && !(currentUser.roles || []).includes(role)) {
+      setToastMessage({ text: 'This account does not have that role.', type: 'warning' });
+      return;
+    }
+    void switchActiveRole(role);
   };
 
-  const login = (email: string, password: string, portalRole?: UserRole) => {
-    const trimmedEmail = email.trim().toLowerCase();
-    const user = profiles.find(p => p.email.toLowerCase() === trimmedEmail);
-
-    if (!user) {
-      logAuthEvent('LOGIN_FAILED', trimmedEmail, 'Failed login attempt - user not found or bad password');
-      return { success: false, error: 'invalidCredentials' };
-    }
-
-    if (user.status === 'suspended') {
-      logAuthEvent('LOGIN_FAILED', trimmedEmail, 'Blocked login attempt on suspended account', user.id, user.role);
-      return { success: false, error: 'accountSuspendedNotice' };
-    }
-
-    if (user.emailVerified === false) {
-      setPendingVerificationEmail(user.email);
-      setActiveRoute('/verify-email');
-      logAuthEvent('LOGIN_FAILED', trimmedEmail, 'Login halted due to unverified email', user.id, user.role);
-      return { success: false, error: 'emailUnverifiedNotice' };
-    }
-
-    // Admin MFA check (Section 35)
-    if (user.role === 'admin' || user.mfaEnabled || portalRole === 'admin') {
-      setPendingMfaUser(user);
-      setActiveRoute('/auth/mfa');
-      setToastMessage({
-        text: 'Admin privileged login requires MFA verification. Demo code: 123456',
-        type: 'info'
-      });
-      return { success: true, requiresMfa: true, user };
-    }
-
-    // Multi-role check (Section 34)
-    if (user.roles && user.roles.length > 1 && !portalRole) {
-      setPendingMfaUser(user);
-      setActiveRoute('/select-role');
-      return { success: true, requiresRoleSelect: true, user };
-    }
-
-    const assignedRole = portalRole || user.role;
-    setCurrentUserState(user);
-    setCurrentRoleState(assignedRole);
-    setIsAuthenticated(true);
-    setPendingMfaUser(null);
-
-    const dest = assignedRole === 'tenant' ? '/tenant/dashboard' : '/landlord/dashboard';
-    setActiveRoute(dest);
-
-    logAuthEvent('LOGIN_SUCCESS', user.email, `Authenticated successfully into ${assignedRole} portal`, user.id, assignedRole);
-    setToastMessage({
-      text: `Welcome back, ${user.name}!`,
-      type: 'success'
-    });
-    return { success: true, user };
+  const updateUserProfile = async (updates: Partial<UserProfile>) => {
+    try {
+      const res = await api(`/users/${currentUser.id}`, { method: 'PATCH', body: JSON.stringify({ name: updates.name, phone: updates.phone, preferredLanguage: updates.preferredLanguage }) });
+      setCurrentUserState(res.user);
+      setToastMessage({ text: 'Profile settings saved successfully.', type: 'success' });
+    } catch (e) { failToast(e, 'Failed to save profile'); }
   };
 
-  const verifyMfaCode = (code: string) => {
-    if (!pendingMfaUser) {
-      return { success: false, error: 'No pending authentication session' };
-    }
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    try { await api('/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }); return { success: true }; }
+    catch (e) { return { success: false, error: e instanceof ApiError ? (e.body?.error || 'currentPasswordIncorrect') : 'currentPasswordIncorrect' }; }
+  };
 
-    if (code.trim() === '123456' || code.trim().length === 6) {
-      const user = pendingMfaUser;
-      setCurrentUserState(user);
-      setCurrentRoleState('admin');
-      setIsAuthenticated(true);
-      setPendingMfaUser(null);
-      setActiveRoute('/admin/dashboard');
+  const toggleUserSuspension = async (userId: string) => {
+    try { await api(`/users/${userId}/suspension`, { method: 'PATCH' }); await refresh(); setToastMessage({ text: 'User account status updated.', type: 'info' }); }
+    catch (e) { failToast(e, 'Failed to update user status'); }
+  };
 
-      logAuthEvent('MFA_CHALLENGE_SUCCESS', user.email, 'Admin TOTP MFA challenge verified successfully', user.id, 'admin');
-      setToastMessage({
-        text: `MFA verified. Welcome to Platform Admin Console, ${user.name}!`,
-        type: 'success'
-      });
-      return { success: true };
-    } else {
-      logAuthEvent('MFA_CHALLENGE_FAILED', pendingMfaUser.email, `Invalid MFA challenge attempt: ${code}`);
-      return { success: false, error: 'mfaCodeInvalid' };
+  const quickDemoLogin = async (target: 'landlord' | 'tenant' | 'admin' | 'multi' | 'suspended') => {
+    const map: Record<string, string> = {
+      landlord: 'david.miller@rentals.com', tenant: 'emily.zhang@gmail.com',
+      admin: 'admin.sarah@smalllandlord.app', multi: 'alex.wong@metroproperties.com',
+      suspended: 'restricted.user@example.com',
+    };
+    const res = await login(map[target], 'DemoPass123', target === 'multi' ? undefined : (target === 'suspended' ? undefined : (target as UserRole)));
+    if (!res.success) setToastMessage({ text: res.error || 'Login failed', type: 'warning' });
+  };
+
+  const addProperty = async (propData: Omit<Property, 'id' | 'createdAt'>, unitDetails: { rent: number; deposit: number; bed: number; bath: number; sqft: number }) => {
+    try {
+      await api('/properties', { method: 'POST', body: JSON.stringify({ property: propData, unitDetails }) });
+      await refresh();
+      setToastMessage({ text: `Property "${propData.name}" added successfully.`, type: 'success' });
+    } catch (e) { failToast(e, 'Failed to add property'); }
+  };
+
+  const recordPayment = async (payment: { unitId: string; tenancyId: string; chargeId: string; amount: number; method: RentPayment['method']; reference?: string; notes?: string }) => {
+    try {
+      await api('/payments', { method: 'POST', body: JSON.stringify(payment) });
+      await refresh();
+      setToastMessage({ text: `Payment of $${payment.amount.toLocaleString()} recorded. Marked as Landlord-Reported.`, type: 'success' });
+    } catch (e) {
+      if (e instanceof ApiError && e.body?.error === 'overpaymentRejected') {
+        setToastMessage({ text: `Payment rejected: amount exceeds the remaining balance of $${e.body.remaining}. Overpayments are not silently absorbed.`, type: 'warning' });
+      } else failToast(e, 'Failed to record payment');
     }
   };
 
-  const logout = () => {
-    if (currentUser) {
-      logAuthEvent('LOGOUT', currentUser.email, 'User logged out of session', currentUser.id, currentRole);
-    }
-    setIsAuthenticated(false);
-    setActiveRoute('/');
-    setToastMessage({
-      text: 'You have been signed out safely.',
-      type: 'info'
-    });
+  const addLedgerAdjustment = async (chargeId: string, tenancyId: string, amount: number, reason: string) => {
+    try { await api('/adjustments', { method: 'POST', body: JSON.stringify({ chargeId, tenancyId, amount, reason }) }); await refresh(); setToastMessage({ text: `Ledger adjusted by ${amount >= 0 ? '+' : ''}$${amount}: ${reason}`, type: 'info' }); }
+    catch (e) { failToast(e, 'Failed to adjust ledger'); }
   };
 
-  const registerLandlord = (name: string, email: string, password: string) => {
-    const trimmedEmail = email.trim().toLowerCase();
-    const existing = profiles.find(p => p.email.toLowerCase() === trimmedEmail);
-    if (existing) {
-      // Do not disclose account existence in unsafe way; give standard response
-      return { success: false, error: 'emailAlreadyRegistered' };
-    }
-
-    const newUserId = `usr_landlord_${Date.now()}`;
-    const newProfile: UserProfile = {
-      id: newUserId,
-      name,
-      email: trimmedEmail,
-      role: 'landlord',
-      roles: ['landlord'],
-      phone: '',
-      preferredLanguage: 'zh',
-      status: 'pending_verification',
-      emailVerified: false,
-      createdAt: new Date().toISOString(),
-      lastLoginAt: new Date().toISOString()
-    };
-
-    const newAccount: LandlordAccount = {
-      id: `acct_${Date.now()}`,
-      name: `${name}'s Rental Portfolio`,
-      ownerId: newUserId,
-      planId: 'free_trial',
-      maxUnits: 2,
-      createdAt: new Date().toISOString().split('T')[0]
-    };
-
-    const newMember: AccountMember = {
-      id: `mem_${Date.now()}`,
-      accountId: newAccount.id,
-      userId: newUserId,
-      role: 'owner',
-      joinedAt: new Date().toISOString()
-    };
-
-    setProfiles(prev => [newProfile, ...prev]);
-    setLandlordAccounts(prev => [newAccount, ...prev]);
-    setAccountMembers(prev => [newMember, ...prev]);
-    setPendingVerificationEmail(trimmedEmail);
-
-    logAuthEvent('SIGNUP_LANDLORD', trimmedEmail, `New landlord account registered: ${name}`, newUserId, 'landlord');
-    setActiveRoute('/verify-email');
-    return { success: true };
+  const addMaintenanceTicket = async (ticketData: Omit<MaintenanceTicket, 'id' | 'ticketNumber' | 'submittedAt' | 'updatedAt'>) => {
+    try { await api('/tickets', { method: 'POST', body: JSON.stringify(ticketData) }); await refresh(); setToastMessage({ text: 'Maintenance ticket logged successfully.', type: 'success' }); }
+    catch (e) { failToast(e, 'Failed to log ticket'); }
   };
 
-  const verifyEmail = (email: string) => {
-    const trimmedEmail = email.trim().toLowerCase();
-    setProfiles(prev =>
-      prev.map(p => {
-        if (p.email.toLowerCase() === trimmedEmail) {
-          return { ...p, emailVerified: true, status: 'active' };
-        }
-        return p;
-      })
-    );
-
-    const verifiedUser = profiles.find(p => p.email.toLowerCase() === trimmedEmail) || {
-      id: `usr_${Date.now()}`,
-      name: 'Verified Landlord',
-      email: trimmedEmail,
-      role: 'landlord' as UserRole,
-      roles: ['landlord' as UserRole],
-      emailVerified: true,
-      status: 'active' as const,
-      preferredLanguage: 'zh' as const
-    };
-
-    setCurrentUserState({ ...verifiedUser, emailVerified: true, status: 'active' });
-    setCurrentRoleState('landlord');
-    setIsAuthenticated(true);
-    setPendingVerificationEmail(null);
-    setActiveRoute('/landlord/dashboard');
-
-    logAuthEvent('EMAIL_VERIFIED', trimmedEmail, 'Email address confirmed via secure link', verifiedUser.id, verifiedUser.role);
-    setToastMessage({
-      text: 'Email verified successfully! Welcome to your Landlord Portal.',
-      type: 'success'
-    });
-    return { success: true };
+  const updateTicketStatus = async (ticketId: string, status: MaintenanceTicket['status'], resolutionNotes?: string, actualCost?: number) => {
+    try { await api(`/tickets/${ticketId}`, { method: 'PATCH', body: JSON.stringify({ status, resolutionNotes, actualCost }) }); await refresh(); setToastMessage({ text: `Ticket status updated to "${status}".`, type: 'info' }); }
+    catch (e) { failToast(e, 'Ticket status change was rejected by the server'); }
   };
 
-  const activateTenantInvitation = (code: string, name: string, email: string, password: string) => {
-    const cleanCode = code.trim().toUpperCase();
-    const invite = tenantInvitations.find(inv => inv.invitationCode.toUpperCase() === cleanCode && inv.status === 'pending');
-
-    if (!invite) {
-      return { success: false, error: 'invalidInvitationCode' };
-    }
-
-    const trimmedEmail = email.trim().toLowerCase();
-    const newTenantId = `usr_tenant_${Date.now()}`;
-    const newTenantProfile: UserProfile = {
-      id: newTenantId,
-      name,
-      email: trimmedEmail,
-      role: 'tenant',
-      roles: ['tenant'],
-      unitId: invite.unitId,
-      propertyId: invite.propertyId,
-      status: 'active',
-      emailVerified: true,
-      preferredLanguage: 'zh',
-      createdAt: new Date().toISOString(),
-      lastLoginAt: new Date().toISOString()
-    };
-
-    // Mark invitation accepted
-    setTenantInvitations(prev =>
-      prev.map(inv => inv.id === invite.id ? { ...inv, status: 'accepted', usedAt: new Date().toISOString() } : inv)
-    );
-
-    // Bind tenancy member
-    const newTenancyMember: TenancyMember = {
-      id: `tmem_${Date.now()}`,
-      tenancyId: invite.tenancyId,
-      userId: newTenantId,
-      unitId: invite.unitId,
-      propertyId: invite.propertyId,
-      status: 'active',
-      joinedAt: new Date().toISOString()
-    };
-
-    setProfiles(prev => [newTenantProfile, ...prev]);
-    setTenancyMembers(prev => [newTenancyMember, ...prev]);
-
-    setCurrentUserState(newTenantProfile);
-    setCurrentRoleState('tenant');
-    setIsAuthenticated(true);
-    setActiveRoute('/tenant/dashboard');
-
-    logAuthEvent('TENANT_INVITE_ACTIVATED', trimmedEmail, `Tenant activated code ${cleanCode} for ${invite.propertyName} (${invite.unitNumber})`, newTenantId, 'tenant');
-    setToastMessage({
-      text: `Tenant account activated! Linked to ${invite.propertyName} - ${invite.unitNumber}`,
-      type: 'success'
-    });
-    return { success: true, unitInfo: `${invite.propertyName} (${invite.unitNumber})` };
+  const addTask = async (taskData: Omit<Task, 'id' | 'createdAt'>) => {
+    try { await api('/tasks', { method: 'POST', body: JSON.stringify(taskData) }); await refresh(); setToastMessage({ text: `Task "${taskData.title}" added to agenda.`, type: 'success' }); }
+    catch (e) { failToast(e, 'Failed to add task'); }
   };
 
-  const createTenantInvitation = (propertyId: string, unitId: string, tenancyId: string, email: string) => {
-    const prop = properties.find(p => p.id === propertyId);
-    const unit = units.find(u => u.id === unitId);
-    const cleanCode = `SLA-${Math.floor(1000 + Math.random() * 9000)}-${unit?.unitNumber.replace(/\s+/g, '').slice(0, 3).toUpperCase() || 'UNT'}`;
-    const expDate = new Date();
-    expDate.setDate(expDate.getDate() + 14);
-
-    const newInvite: TenantInvitation = {
-      id: `inv_${Date.now()}`,
-      propertyId,
-      unitId,
-      tenancyId,
-      propertyName: prop?.name || 'Property',
-      unitNumber: unit?.unitNumber || 'Unit',
-      email: email.trim().toLowerCase(),
-      invitationCode: cleanCode,
-      codeHash: `sha256_${Math.random().toString(36).substring(2, 18)}`,
-      expiresAt: expDate.toISOString(),
-      status: 'pending',
-      createdBy: currentUser.name,
-      createdAt: new Date().toISOString()
-    };
-
-    setTenantInvitations(prev => [newInvite, ...prev]);
-    logAuthEvent('TENANT_INVITE_CREATED', currentUser.email, `Created tenant invite ${cleanCode} for ${newInvite.propertyName}`, currentUser.id, currentRole);
-    setToastMessage({
-      text: `Tenant invitation code ${cleanCode} generated successfully.`,
-      type: 'success'
-    });
-    return newInvite;
+  const toggleTaskStatus = async (taskId: string) => {
+    try { await api(`/tasks/${taskId}/toggle`, { method: 'PATCH' }); await refresh(); }
+    catch (e) { failToast(e, 'Failed to update task'); }
   };
 
-  const requestPasswordReset = (email: string) => {
-    const token = `rst_${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
-    const expDate = new Date();
-    expDate.setHours(expDate.getHours() + 2);
-    setActiveResetToken({ email, token, expiresAt: expDate.toISOString() });
-    logAuthEvent('PASSWORD_RESET_REQUESTED', email, `Password reset token generated: ${token}`);
-    return { success: true, token };
+  const updateInspectionItem = async (inspectionId: string, itemId: string, condition: Inspection['items'][0]['condition'], notes: string, category: Inspection['items'][0]['wearTearCategory']) => {
+    try { await api(`/inspections/${inspectionId}/items/${itemId}`, { method: 'PATCH', body: JSON.stringify({ condition, notes, wearTearCategory: category }) }); await refresh(); }
+    catch (e) { failToast(e, 'Inspection is locked or the change was rejected'); }
   };
 
-  const resetPasswordWithToken = (token: string, newPassword: string) => {
-    if (!activeResetToken || activeResetToken.token !== token.trim()) {
-      return { success: false, error: 'Invalid or expired password reset token' };
-    }
-    logAuthEvent('PASSWORD_RESET_COMPLETED', activeResetToken.email, 'Password successfully updated via reset token');
-    setActiveResetToken(null);
-    setToastMessage({
-      text: 'Password updated successfully! Please sign in with your new credentials.',
-      type: 'success'
-    });
-    setActiveRoute('/login');
-    return { success: true };
+  const signInspection = async (inspectionId: string, signerRole: 'landlord' | 'tenant', _signerName: string) => {
+    try {
+      await api(`/inspections/${inspectionId}/sign`, { method: 'POST', body: JSON.stringify({ signerRole }) });
+      await refresh();
+      setToastMessage({ text: `Inspection signed as ${signerRole}. The server records your account name, not a typed name.`, type: 'success' });
+    } catch (e) { failToast(e, 'Signature was rejected: you can only sign your own side'); }
   };
 
-  const switchActiveRole = (role: UserRole) => {
-    setCurrentRoleState(role);
-    if (pendingMfaUser) {
-      setCurrentUserState(pendingMfaUser);
-      setPendingMfaUser(null);
-    }
-    const dest = role === 'tenant' ? '/tenant/dashboard' : role === 'admin' ? '/admin/dashboard' : '/landlord/dashboard';
-    setActiveRoute(dest);
-    logAuthEvent('ROLE_SWITCHED', currentUser.email, `Switched view persona to ${role}`, currentUser.id, role);
-    setToastMessage({
-      text: `Switched to ${role === 'landlord' ? 'Landlord' : role === 'tenant' ? 'Tenant' : 'Admin'} portal`,
-      type: 'info'
-    });
-  };
-
-  const updateUserProfile = (updates: Partial<UserProfile>) => {
-    const updated = { ...currentUser, ...updates };
-    setCurrentUserState(updated);
-    setProfiles(prev => prev.map(p => p.id === currentUser.id ? updated : p));
-    logAuthEvent('PROFILE_UPDATED', currentUser.email, 'Updated profile settings', currentUser.id, currentRole);
-    setToastMessage({
-      text: 'Profile settings saved successfully.',
-      type: 'success'
-    });
-  };
-
-  const toggleUserSuspension = (userId: string) => {
-    setProfiles(prev =>
-      prev.map(p => {
-        if (p.id === userId) {
-          const nextStatus = p.status === 'suspended' ? 'active' : 'suspended';
-          logAuthEvent(
-            nextStatus === 'suspended' ? 'ACCOUNT_SUSPENDED' : 'ACCOUNT_ACTIVATED',
-            currentUser.email,
-            `Admin ${currentUser.name} changed status of ${p.email} to ${nextStatus}`,
-            p.id,
-            p.role
-          );
-          return { ...p, status: nextStatus };
-        }
-        return p;
-      })
-    );
-    setToastMessage({
-      text: 'User account status updated.',
-      type: 'info'
-    });
-  };
-
-  const quickDemoLogin = (target: 'landlord' | 'tenant' | 'admin' | 'multi' | 'suspended') => {
-    if (target === 'landlord') {
-      login('david.miller@rentals.com', 'demoPass123', 'landlord');
-    } else if (target === 'tenant') {
-      login('emily.zhang@gmail.com', 'demoPass123', 'tenant');
-    } else if (target === 'admin') {
-      const adminUser = profiles.find(p => p.email === 'admin.sarah@smalllandlord.app') || DEMO_USERS.admin;
-      setPendingMfaUser(adminUser);
-      setActiveRoute('/auth/mfa');
-      setToastMessage({
-        text: 'Admin privileged login requires MFA verification. Demo code: 123456',
-        type: 'info'
-      });
-    } else if (target === 'multi') {
-      const multiUser = profiles.find(p => p.email === 'alex.wong@metroproperties.com') || SEED_PROFILES[3];
-      setPendingMfaUser(multiUser);
-      setActiveRoute('/select-role');
-    } else if (target === 'suspended') {
-      login('restricted.user@example.com', 'demoPass123');
-    }
-  };
-
-  const addProperty = (
-    propData: Omit<Property, 'id' | 'createdAt'>,
-    unitDetails: { rent: number; deposit: number; bed: number; bath: number; sqft: number }
-  ) => {
-    const newPropId = `prop_${Date.now()}`;
-    const newProperty: Property = {
-      ...propData,
-      id: newPropId,
-      createdAt: new Date().toISOString().split('T')[0]
-    };
-
-    const newUnits: Unit[] = [];
-    for (let i = 1; i <= propData.unitsCount; i++) {
-      const uNum = propData.unitsCount === 1 ? 'Main' : `Unit ${i}`;
-      newUnits.push({
-        id: `unit_${newPropId}_${i}`,
-        propertyId: newPropId,
-        unitNumber: uNum,
-        bedrooms: unitDetails.bed,
-        bathrooms: unitDetails.bath,
-        sqft: unitDetails.sqft,
-        monthlyRent: unitDetails.rent,
-        securityDeposit: unitDetails.deposit,
-        status: 'vacant',
-        appliances: ['Refrigerator', 'Range Oven', 'Smoke Detector']
-      });
-    }
-
-    setProperties(prev => [newProperty, ...prev]);
-    setUnits(prev => [...newUnits, ...prev]);
-
-    // Record audit log
-    const log: AuditLog = {
-      id: `aud_${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      actorName: currentUser.name,
-      actorRole: currentRole,
-      action: 'CREATE_PROPERTY',
-      entityType: 'Property',
-      entityId: newPropId,
-      details: `Added property: ${newProperty.name} (${newProperty.state}) with ${propData.unitsCount} unit(s)`
-    };
-    setAuditLogs(prev => [log, ...prev]);
-
-    setToastMessage({
-      text: `Property "${newProperty.name}" added successfully with ${propData.unitsCount} unit(s).`,
-      type: 'success'
-    });
-  };
-
-  const recordPayment = ({
-    unitId,
-    tenancyId,
-    chargeId,
-    amount,
-    method,
-    reference,
-    notes
-  }: {
-    unitId: string;
-    tenancyId: string;
-    chargeId: string;
-    amount: number;
-    method: RentPayment['method'];
-    reference?: string;
-    notes?: string;
-  }) => {
-    const newPaymentId = `pay_${Date.now()}`;
-    const newPayment: RentPayment = {
-      id: newPaymentId,
-      tenancyId,
-      unitId,
-      chargeId,
-      amount,
-      paymentDate: new Date().toISOString().split('T')[0],
-      method,
-      source: 'landlord_reported', // Critical rule from spec
-      referenceNumber: reference || `REF-${Math.floor(100000 + Math.random() * 900000)}`,
-      notes,
-      reportedBy: currentUser.name,
-      createdAt: new Date().toISOString()
-    };
-
-    setPayments(prev => [newPayment, ...prev]);
-
-    // Update charge paid amount
-    setRentCharges(prev =>
-      prev.map(chg => {
-        if (chg.id === chargeId) {
-          const totalPaid = chg.paidAmount + amount;
-          const status = totalPaid >= chg.amount ? 'paid' : totalPaid > 0 ? 'partial' : 'unpaid';
-          return { ...chg, paidAmount: totalPaid, status };
-        }
-        return chg;
-      })
-    );
-
-    // Audit log
-    const log: AuditLog = {
-      id: `aud_${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      actorName: currentUser.name,
-      actorRole: currentRole,
-      action: 'RECORD_RENT_PAYMENT',
-      entityType: 'RentPayment',
-      entityId: newPaymentId,
-      details: `Recorded $${amount.toLocaleString()} via ${method} (Landlord-Reported)`
-    };
-    setAuditLogs(prev => [log, ...prev]);
-
-    setToastMessage({
-      text: `Payment of $${amount.toLocaleString()} recorded. Marked as Landlord-Reported.`,
-      type: 'success'
-    });
-  };
-
-  const addLedgerAdjustment = (chargeId: string, tenancyId: string, amount: number, reason: string) => {
-    const newAdj: LedgerAdjustment = {
-      id: `adj_${Date.now()}`,
-      chargeId,
-      tenancyId,
-      amount,
-      reason,
-      recordedBy: currentUser.name,
-      date: new Date().toISOString().split('T')[0]
-    };
-    setAdjustments(prev => [newAdj, ...prev]);
-
-    // Update charge amount
-    setRentCharges(prev =>
-      prev.map(chg => {
-        if (chg.id === chargeId) {
-          const newAmount = Math.max(0, chg.amount + amount);
-          const status = chg.paidAmount >= newAmount ? 'paid' : chg.paidAmount > 0 ? 'partial' : 'unpaid';
-          return { ...chg, amount: newAmount, status };
-        }
-        return chg;
-      })
-    );
-
-    setToastMessage({
-      text: `Ledger adjusted by ${amount >= 0 ? '+' : ''}$${amount}: ${reason}`,
-      type: 'info'
-    });
-  };
-
-  const addMaintenanceTicket = (ticketData: Omit<MaintenanceTicket, 'id' | 'ticketNumber' | 'submittedAt' | 'updatedAt'>) => {
-    const tktNum = `WO-2026-${Math.floor(100 + Math.random() * 900)}`;
-    const newTicket: MaintenanceTicket = {
-      ...ticketData,
-      id: `tkt_${Date.now()}`,
-      ticketNumber: tktNum,
-      submittedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-    setMaintenanceTickets(prev => [newTicket, ...prev]);
-
-    // Auto-create task if high priority or emergency
-    if (newTicket.priority === 'emergency' || newTicket.priority === 'high') {
-      const urgentTask: Task = {
-        id: `tsk_${Date.now()}`,
-        title: `Dispatch vendor for ${newTicket.priority.toUpperCase()}: ${newTicket.title}`,
-        description: `Ticket ${newTicket.ticketNumber} submitted by ${newTicket.requesterName}`,
-        propertyId: newTicket.propertyId,
-        unitId: newTicket.unitId,
-        relatedType: 'maintenance',
-        relatedId: newTicket.id,
-        assigneeName: 'David Miller',
-        dueDate: new Date().toISOString().split('T')[0],
-        priority: 'high',
-        status: 'todo',
-        createdAt: new Date().toISOString().split('T')[0]
-      };
-      setTasks(prev => [urgentTask, ...prev]);
-    }
-
-    setToastMessage({
-      text: `Maintenance ticket ${tktNum} logged successfully.`,
-      type: 'success'
-    });
-  };
-
-  const updateTicketStatus = (ticketId: string, status: MaintenanceTicket['status'], resolutionNotes?: string, actualCost?: number) => {
-    setMaintenanceTickets(prev =>
-      prev.map(tkt => {
-        if (tkt.id === ticketId) {
-          return {
-            ...tkt,
-            status,
-            resolutionNotes: resolutionNotes || tkt.resolutionNotes,
-            actualCost: actualCost !== undefined ? actualCost : tkt.actualCost,
-            updatedAt: new Date().toISOString(),
-            closedAt: status === 'closed' || status === 'completed' ? new Date().toISOString() : tkt.closedAt
-          };
-        }
-        return tkt;
-      })
-    );
-
-    setToastMessage({
-      text: `Ticket status updated to "${status}".`,
-      type: 'info'
-    });
-  };
-
-  const addTask = (taskData: Omit<Task, 'id' | 'createdAt'>) => {
-    const newTask: Task = {
-      ...taskData,
-      id: `tsk_${Date.now()}`,
-      createdAt: new Date().toISOString().split('T')[0]
-    };
-    setTasks(prev => [newTask, ...prev]);
-    setToastMessage({
-      text: `Task "${newTask.title}" added to agenda.`,
-      type: 'success'
-    });
-  };
-
-  const toggleTaskStatus = (taskId: string) => {
-    setTasks(prev =>
-      prev.map(tsk => {
-        if (tsk.id === taskId) {
-          const nextStatus = tsk.status === 'completed' ? 'todo' : 'completed';
-          return { ...tsk, status: nextStatus };
-        }
-        return tsk;
-      })
-    );
-  };
-
-  const updateInspectionItem = (
-    inspectionId: string,
-    itemId: string,
-    condition: Inspection['items'][0]['condition'],
-    notes: string,
-    category: Inspection['items'][0]['wearTearCategory']
-  ) => {
-    setInspections(prev =>
-      prev.map(insp => {
-        if (insp.id === inspectionId) {
-          const updatedItems = insp.items.map(it => {
-            if (it.id === itemId) {
-              return { ...it, condition, notes, wearTearCategory: category };
-            }
-            return it;
-          });
-          return { ...insp, items: updatedItems };
-        }
-        return insp;
-      })
-    );
-  };
-
-  const signInspection = (inspectionId: string, signerRole: 'landlord' | 'tenant', signerName: string) => {
-    setInspections(prev =>
-      prev.map(insp => {
-        if (insp.id === inspectionId) {
-          if (signerRole === 'landlord') {
-            return {
-              ...insp,
-              landlordSigned: true,
-              landlordSignedAt: new Date().toISOString(),
-              landlordSignatureName: signerName
-            };
-          } else {
-            return {
-              ...insp,
-              tenantSigned: true,
-              tenantSignedAt: new Date().toISOString(),
-              tenantSignatureName: signerName
-            };
-          }
-        }
-        return insp;
-      })
-    );
-
-    setToastMessage({
-      text: `Inspection certified by ${signerName} (${signerRole}). Digital signature locked.`,
-      type: 'success'
-    });
-  };
-
-  const sendMessage = (conversationId: string, text: string, attachmentName?: string, attachmentType?: 'image' | 'pdf') => {
-    const newMsg: Message = {
-      id: `msg_${Date.now()}`,
-      conversationId,
-      senderId: currentUser.id,
-      senderRole: currentRole,
-      senderName: currentUser.name,
-      body: text,
-      attachmentName,
-      attachmentType,
-      sentAt: new Date().toISOString(),
-      read: true
-    };
-
-    setMessages(prev => [...prev, newMsg]);
-
-    // Update conversation snippet
-    setConversations(prev =>
-      prev.map(conv => {
-        if (conv.id === conversationId) {
-          return {
-            ...conv,
-            lastMessageSnippet: text || `[Attachment: ${attachmentName}]`,
-            lastMessageAt: new Date().toISOString()
-          };
-        }
-        return conv;
-      })
-    );
+  const sendMessage = async (conversationId: string, text: string, attachmentName?: string, attachmentType?: 'image' | 'pdf') => {
+    if (attachmentName) { setToastMessage({ text: 'Attachment upload is not implemented yet; the message was not sent with a file.', type: 'warning' }); return; }
+    try { await api('/messages', { method: 'POST', body: JSON.stringify({ conversationId, body: text, attachmentType }) }); await refresh(); }
+    catch (e) { failToast(e, 'Failed to send message'); }
   };
 
   const toggleBookmarkResource = (resourceId: string) => {
-    setLegalResources(prev =>
-      prev.map(res => {
-        if (res.id === resourceId) {
-          return { ...res, isBookmarked: !res.isBookmarked };
-        }
-        return res;
-      })
-    );
+    // Phase 1: bookmarks are a local UI preference; legal resources themselves
+    // remain the static dataset. This is intentionally not presented as a
+    // persisted server feature.
+    setLegalResources(prev => prev.map(res => res.id === resourceId ? { ...res, isBookmarked: !res.isBookmarked } : res));
   };
 
-  // Real-time Live Event Simulators
-  const simulateLiveRentEvent = () => {
-    // Pay the remaining $650 on Unit 2B!
-    const targetCharge = rentCharges.find(c => c.unitId === 'unit_2b' && c.status === 'partial');
-    if (targetCharge) {
-      recordPayment({
-        unitId: 'unit_2b',
-        tenancyId: 'ten_2b',
-        chargeId: targetCharge.id,
-        amount: 650,
-        method: 'zelle',
-        reference: `SIM-ZELLE-${Date.now().toString().slice(-4)}`,
-        notes: 'Simulated real-time payment received from tenant Emily Zhang'
-      });
-    } else {
-      // Simulate general payment for unit 1a
-      recordPayment({
-        unitId: 'unit_1a',
-        tenancyId: 'ten_1a',
-        chargeId: rentCharges[0]?.id || 'chg_1',
-        amount: 500,
-        method: 'bank_transfer',
-        reference: `SIM-ACH-${Date.now().toString().slice(-4)}`,
-        notes: 'Simulated real-time payment receipt'
-      });
-    }
+  const simulateLiveRentEvent = async () => {
+    try { await api('/simulate/rent', { method: 'POST' }); await refresh(); }
+    catch (e) { failToast(e, 'No partial charge to simulate'); }
   };
-
-  const simulateLiveMaintenanceEvent = () => {
-    addMaintenanceTicket({
-      propertyId: 'prop_elmwood',
-      unitId: 'unit_1a',
-      requesterName: 'Marcus Johnson',
-      requesterEmail: 'marcus.j@gmail.com',
-      title: 'Water pipe leak under bathroom vanity / 卫生间浴室柜水管渗漏',
-      category: 'plumbing',
-      description: 'Sudden puddle found this morning beneath the cold water supply valve. Water shutoff valve tightened temporarily.',
-      priority: 'emergency',
-      status: 'submitted',
-      isEmergency: true,
-      photos: []
-    });
+  const simulateLiveMaintenanceEvent = async () => {
+    try { await api('/simulate/maintenance', { method: 'POST' }); await refresh(); }
+    catch (e) { failToast(e, 'Failed to create simulated ticket'); }
   };
 
   const clearToast = () => setToastMessage(null);
@@ -1813,66 +1357,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <AppContext.Provider
       value={{
-        currentRole,
-        currentUser,
-        isAuthenticated,
-        activeRoute,
-        profiles,
-        landlordAccounts,
-        accountMembers,
-        tenancyMembers,
-        tenantInvitations,
-        platformAdmins,
-        authAuditEvents,
-        pendingMfaUser,
-        pendingVerificationEmail,
-        activeResetToken,
-        setActiveRoute,
-        login,
-        verifyMfaCode,
-        logout,
-        registerLandlord,
-        verifyEmail,
-        activateTenantInvitation,
-        createTenantInvitation,
-        requestPasswordReset,
-        resetPasswordWithToken,
-        switchActiveRole,
-        updateUserProfile,
-        toggleUserSuspension,
-        quickDemoLogin,
-        properties,
-        units,
-        tenancies,
-        rentCharges,
-        payments,
-        adjustments,
-        maintenanceTickets,
-        tasks,
-        inspections,
-        conversations,
-        messages,
-        legalResources,
-        documents,
-        auditLogs,
-        subscriptionPlans,
-        activePlanId,
-        toastMessage,
-        setCurrentRole,
-        addProperty,
-        recordPayment,
-        addLedgerAdjustment,
-        addMaintenanceTicket,
-        updateTicketStatus,
-        addTask,
-        toggleTaskStatus,
-        updateInspectionItem,
-        signInspection,
-        sendMessage,
-        toggleBookmarkResource,
-        simulateLiveRentEvent,
-        simulateLiveMaintenanceEvent,
-        clearToast
+        currentRole, currentUser, isAuthenticated, activeRoute,
+        profiles, landlordAccounts, accountMembers, tenancyMembers, tenantInvitations,
+        platformAdmins, authAuditEvents, pendingMfaUser, pendingVerificationEmail, activeResetToken,
+        setActiveRoute, login, verifyMfaCode, logout, registerLandlord, verifyEmail,
+        activateTenantInvitation, createTenantInvitation, requestPasswordReset, resetPasswordWithToken, resendVerification: async (email: string) => { try { await api('/auth/resend-verification', { method: 'POST', body: JSON.stringify({ email }) }); setToastMessage({ text: 'Verification token re-issued. In local development, check the backend terminal log.', type: 'info' }); } catch { setToastMessage({ text: 'Failed to re-issue verification token.', type: 'warning' }); } },
+        switchActiveRole, updateUserProfile, toggleUserSuspension, changePassword, quickDemoLogin,
+        properties, units, tenancies, rentCharges, payments, adjustments, maintenanceTickets,
+        tasks, inspections, conversations, messages, legalResources, documents, auditLogs,
+        subscriptionPlans, activePlanId, toastMessage, setCurrentRole, addProperty, recordPayment,
+        addLedgerAdjustment, addMaintenanceTicket, updateTicketStatus, addTask, toggleTaskStatus,
+        updateInspectionItem, signInspection, sendMessage, toggleBookmarkResource,
+        simulateLiveRentEvent, simulateLiveMaintenanceEvent, clearToast,
       }}
     >
       {children}

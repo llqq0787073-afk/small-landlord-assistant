@@ -48,6 +48,16 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, [setActiveRoute]);
 
+  // Route guard: unauthenticated users may only see public auth routes.
+  // The backend is the authority; this only prevents the old behaviour
+  // where typing a hash opened the dashboard with no login.
+  useEffect(() => {
+    const publicRoutes = ['/', '/login', '/register/landlord', '/register/tenant', '/auth/mfa', '/select-role', '/forgot-password', '/reset-password', '/verify-email'];
+    if (!isAuthenticated && !publicRoutes.includes(activeRoute)) {
+      setActiveRoute('/');
+    }
+  }, [isAuthenticated, activeRoute, setActiveRoute]);
+
   // Keep window hash synced with activeRoute
   useEffect(() => {
     if (activeRoute && window.location.hash !== `#${activeRoute}`) {
@@ -146,7 +156,7 @@ const AppContent: React.FC = () => {
     return (
       <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans">
         <Navbar activeTab="profile_settings" setActiveTab={setActiveTab} />
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 lg:pb-12">
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 pb-safe lg:pb-12">
           <ProfileSettings />
         </main>
         <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />
@@ -161,7 +171,7 @@ const AppContent: React.FC = () => {
       <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 lg:pb-12">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-24 pb-safe lg:pb-12">
         {/* Landlord Portal Views */}
         {currentRole === 'landlord' && (
           <>
@@ -212,9 +222,8 @@ const AppContent: React.FC = () => {
         {/* Admin Portal Views */}
         {currentRole === 'admin' && (
           <>
-            {activeTab === 'admin' && <AdminPortal />}
+            {(activeTab === 'admin' || activeTab === 'dashboard' || activeTab === 'properties' || activeTab === 'rent_ledger' || activeTab === 'maintenance' || activeTab === 'tasks' || activeTab === 'messages') && <AdminPortal />}
             {activeTab === 'legal_resources' && <LegalResourcesCenter />}
-            {activeTab === 'dashboard' && <AdminPortal />}
             {activeTab === 'profile_settings' && <ProfileSettings />}
             {activeTab === 'role_select' && <RoleSwitcher />}
           </>

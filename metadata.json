@@ -1,8 +1,1 @@
-{
-  "name": "Remix Small Landlord Assistant | 小房东租赁管理助手",
-  "description": "Bilingual rental property management system for US landlords (1-10 units) featuring rent ledger, inspections with photo hash verification, maintenance tickets, tasks, tenant portal, US state legal compliance center, and real-time analytics.",
-  "requestFramePermissions": [],
-  "majorCapabilities": [
-    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
-  ]
-}
+{"description":"Bilingual rental property management system for US landlords (1-10 units) featuring rent ledger, maintenance tickets, tasks, tenant portal, US state legal compliance center, and analytics. Phase 1 backend: Express + SQLite + JWT. No server-side Gemini/AI is implemented in phase 1, and photo hashes in seed data are sample values, not evidence.","majorCapabilities":[],"name":"Remix Small Landlord Assistant | 小房东租赁管理助手","requestFramePermissions":[]}

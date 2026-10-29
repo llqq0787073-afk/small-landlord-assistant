@@ -24,7 +24,7 @@ export const UnifiedLogin: React.FC = () => {
 
   const [selectedPortal, setSelectedPortal] = useState<UserRole>('landlord');
   const [email, setEmail] = useState('david.miller@rentals.com');
-  const [password, setPassword] = useState('demoPass123');
+  const [password, setPassword] = useState('DemoPass123');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
@@ -36,17 +36,17 @@ export const UnifiedLogin: React.FC = () => {
     setErrorMessage(null);
     if (portal === 'landlord') {
       setEmail('david.miller@rentals.com');
-      setPassword('demoPass123');
+      setPassword('DemoPass123');
     } else if (portal === 'tenant') {
       setEmail('emily.zhang@gmail.com');
-      setPassword('demoPass123');
+      setPassword('DemoPass123');
     } else if (portal === 'admin') {
       setEmail('admin.sarah@smalllandlord.app');
-      setPassword('demoPass123');
+      setPassword('DemoPass123');
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -56,14 +56,11 @@ export const UnifiedLogin: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      const res = login(email.trim(), password, selectedPortal);
-      setIsSubmitting(false);
-
-      if (!res.success && res.error) {
-        setErrorMessage(t(res.error));
-      }
-    }, 500);
+    const res = await login(email.trim(), password, selectedPortal);
+    setIsSubmitting(false);
+    if (!res.success && res.error) {
+      setErrorMessage(t(res.error));
+    }
   };
 
   return (
@@ -263,7 +260,7 @@ export const UnifiedLogin: React.FC = () => {
                 onClick={() => {
                   setSelectedPortal('landlord');
                   setEmail('david.miller@rentals.com');
-                  setPassword('demoPass123');
+                  setPassword('DemoPass123');
                 }}
                 className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-left transition-colors"
               >
@@ -276,7 +273,7 @@ export const UnifiedLogin: React.FC = () => {
                 onClick={() => {
                   setSelectedPortal('tenant');
                   setEmail('emily.zhang@gmail.com');
-                  setPassword('demoPass123');
+                  setPassword('DemoPass123');
                 }}
                 className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-left transition-colors"
               >
@@ -289,12 +286,12 @@ export const UnifiedLogin: React.FC = () => {
                 onClick={() => {
                   setSelectedPortal('admin');
                   setEmail('admin.sarah@smalllandlord.app');
-                  setPassword('demoPass123');
+                  setPassword('DemoPass123');
                 }}
                 className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-left transition-colors"
               >
                 <span className="font-semibold text-slate-800 block truncate">Sarah Lin</span>
-                <span className="text-[10px] text-slate-500">Admin (MFA: 123456)</span>
+                <span className="text-[10px] text-slate-500">Admin</span>
               </button>
 
               <button
@@ -302,7 +299,7 @@ export const UnifiedLogin: React.FC = () => {
                 onClick={() => {
                   setSelectedPortal('landlord');
                   setEmail('alex.wong@metroproperties.com');
-                  setPassword('demoPass123');
+                  setPassword('DemoPass123');
                 }}
                 className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 text-left transition-colors"
               >

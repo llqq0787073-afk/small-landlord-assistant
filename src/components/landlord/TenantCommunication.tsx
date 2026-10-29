@@ -27,18 +27,8 @@ export const TenantCommunication: React.FC = () => {
 
     sendMessage(selectedConvId, inputText);
     setInputText('');
-
-    // Optional simulated instant tenant/landlord reply for interactive satisfaction
-    if (currentRole === 'landlord') {
-      setTimeout(() => {
-        sendMessage(
-          selectedConvId,
-          lang === 'zh'
-            ? '收到您的消息！我会按预约时间在家里等候维修师傅。谢谢！'
-            : 'Got your message! I will be home at the scheduled time for the contractor. Thank you!'
-        );
-      }, 1500);
-    }
+    // No auto-reply: a reply only exists when the other user actually sends it.
+    // The old code sent a tenant-worded message from the landlord account.
   };
 
   return (
@@ -54,9 +44,9 @@ export const TenantCommunication: React.FC = () => {
       </div>
 
       {/* Chat Container */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden grid grid-cols-1 md:grid-cols-3 h-[600px]">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-visible md:overflow-hidden grid grid-cols-1 md:grid-cols-3 md:h-[600px]">
         {/* Conversation List (Left Column) */}
-        <div className="border-r border-slate-200 flex flex-col h-full bg-slate-50/50">
+        <div className="border-r border-slate-200 flex flex-col h-[240px] md:h-full bg-slate-50/50">
           <div className="p-3 border-b border-slate-200">
             <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
               {lang === 'zh' ? '租客会话列表' : 'Active Conversations'}
@@ -94,7 +84,7 @@ export const TenantCommunication: React.FC = () => {
         </div>
 
         {/* Message Thread (Right 2 Columns) */}
-        <div className="md:col-span-2 flex flex-col h-full bg-white">
+        <div className="md:col-span-2 flex flex-col h-[480px] md:h-full bg-white">
           {/* Thread Header */}
           {currentConv && (
             <div className="p-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
@@ -120,7 +110,7 @@ export const TenantCommunication: React.FC = () => {
           {/* Messages Feed */}
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {threadMessages.map(msg => {
-              const isMe = msg.senderRole === currentRole;
+              const isMe = msg.senderId === currentUser.id;
 
               return (
                 <div
@@ -169,16 +159,9 @@ export const TenantCommunication: React.FC = () => {
           >
             <button
               type="button"
-              onClick={() => {
-                sendMessage(
-                  selectedConvId,
-                  lang === 'zh' ? '已向您发送维修进度确认单 (PDF)' : 'Attached Work Order Confirmation Notice (PDF)',
-                  'Work_Order_Schedule_Notice.pdf',
-                  'pdf'
-                );
-              }}
-              className="p-2 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-200 transition-colors"
-              title="Attach Document"
+              disabled
+              className="p-2 min-h-[44px] min-w-[44px] text-slate-300 rounded-lg cursor-not-allowed"
+              title={lang === 'zh' ? '附件上传尚未实现' : 'Attachment upload is not implemented yet'}
             >
               <Paperclip className="w-4 h-4" />
             </button>
@@ -188,13 +171,13 @@ export const TenantCommunication: React.FC = () => {
               value={inputText}
               onChange={e => setInputText(e.target.value)}
               placeholder={t('sendMsgPlaceholder')}
-              className="flex-1 text-xs px-3 py-2 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-600"
+              className="flex-1 text-xs px-3 py-2 min-h-[44px] bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-600"
             />
 
             <button
               type="submit"
               disabled={!inputText.trim()}
-              className="p-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-xl transition-all shadow-sm"
+              className="p-2 min-h-[44px] min-w-[44px] flex items-center justify-center bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-xl transition-all shadow-sm"
             >
               <Send className="w-4 h-4" />
             </button>

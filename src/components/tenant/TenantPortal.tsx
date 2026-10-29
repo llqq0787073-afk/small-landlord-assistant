@@ -29,6 +29,9 @@ export const TenantPortal: React.FC = () => {
     payments,
     maintenanceTickets,
     inspections,
+    conversations,
+    messages,
+    currentUser,
     addMaintenanceTicket,
     signInspection,
     sendMessage
@@ -41,28 +44,33 @@ export const TenantPortal: React.FC = () => {
   const [isEmergency, setIsEmergency] = useState(false);
   const [chatInput, setChatInput] = useState('');
 
-  // Target tenant: Emily Zhang in Unit 2B (prop_elmwood)
-  const myUnit = units.find(u => u.id === 'unit_2b');
-  const myProp = properties.find(p => p.id === 'prop_elmwood');
-  const myTenancy = tenancies.find(t => t.id === 'ten_2b');
-  const myCharges = rentCharges.filter(c => c.unitId === 'unit_2b');
-  const myPayments = payments.filter(p => p.unitId === 'unit_2b');
-  const myTickets = maintenanceTickets.filter(t => t.unitId === 'unit_2b');
-  const myInspection = inspections.find(i => i.unitId === 'unit_2b');
+  // Tenant identity comes from the logged-in user, never hardcoded.
+  const myUnitId = currentUser.unitId;
+  const myUnit = units.find(u => u.id === myUnitId);
+  const myProp = properties.find(p => p.id === currentUser.propertyId);
+  const myTenancy = tenancies.find(t => t.unitId === myUnitId);
+  const myCharges = rentCharges.filter(c => c.unitId === myUnitId);
+  const myPayments = payments.filter(p => p.unitId === myUnitId);
+  const myTickets = maintenanceTickets.filter(t => t.unitId === myUnitId);
+  const myInspection = inspections.find(i => i.unitId === myUnitId);
+  const myConversation = conversations.find(c => c.unitId === myUnitId) || conversations[0];
+  const myMessages = myConversation ? messages.filter(m => m.conversationId === myConversation.id) : [];
 
-  // Oct charge balance
-  const currentCharge = myCharges.find(c => c.billingMonth === '2026-10');
+  // Current-month charge balance (not a hardcoded month)
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const currentCharge = myCharges.find(c => c.billingMonth === currentMonth) || myCharges[myCharges.length - 1];
   const balanceRemaining = currentCharge ? Math.max(0, currentCharge.amount - currentCharge.paidAmount) : 0;
 
   const handleCreateTicket = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newRepairTitle) return;
 
+    if (!myUnit) return;
     addMaintenanceTicket({
-      propertyId: 'prop_elmwood',
-      unitId: 'unit_2b',
-      requesterName: 'Emily Zhang (张晓雯)',
-      requesterEmail: 'emily.zhang@gmail.com',
+      propertyId: myUnit.propertyId,
+      unitId: myUnit.id,
+      requesterName: currentUser.name,
+      requesterEmail: currentUser.email,
       title: newRepairTitle,
       category: newRepairCategory,
       description: newRepairDesc,
@@ -81,7 +89,7 @@ export const TenantPortal: React.FC = () => {
   const handleSendChat = (e: React.FormEvent) => {
     e.preventDefault();
     if (!chatInput.trim()) return;
-    sendMessage('conv_unit_2b', chatInput);
+    if (myConversation) sendMessage(myConversation.id, chatInput);
     setChatInput('');
   };
 
@@ -96,14 +104,14 @@ export const TenantPortal: React.FC = () => {
             </span>
             <span className="text-slate-500">·</span>
             <span className="text-xs text-slate-300">
-              Emily Zhang · Unit 2B (Bethesda MD)
+              {currentUser.name} · {myUnit?.unitNumber || ''} ({myProp?.city || ''} {myProp?.state || ''})
             </span>
           </div>
           <h1 className="text-xl md:text-2xl font-bold mt-1 text-white">
-            {lang === 'zh' ? '欢迎回来，张晓雯' : 'Welcome Home, Emily'}
+            {lang === 'zh' ? `欢迎回来，${currentUser.name}` : `Welcome Home, ${currentUser.name.split(' ')[0] || ''}`}
           </h1>
           <p className="text-xs md:text-sm text-slate-400 mt-1">
-            Elmwood Townhomes, Unit 2B · {lang === 'zh' ? '租约生效中至 2026年10月31日' : 'Active Lease through Oct 31, 2026'}
+            {myProp?.name || ''}, {myUnit?.unitNumber || ''} · {myTenancy ? (lang === 'zh' ? `租约生效中至 ${myTenancy.endDate}` : `Active Lease through ${myTenancy.endDate}`) : ''}
           </p>
         </div>
 
@@ -169,14 +177,14 @@ export const TenantPortal: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Rent Status Card */}
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-              <span className="text-xs font-medium text-slate-500">{lang === 'zh' ? '10月应付租金与余额' : 'October Rent Due'}</span>
+              <span className="text-xs font-medium text-slate-500">{lang === 'zh' ? `${currentMonth} 应付租金与余额` : `${currentMonth} Rent Due`}</span>
               <div className="text-2xl font-bold text-slate-900 tabular-nums mt-1">
                 ${currentCharge?.amount.toLocaleString()}
               </div>
               <div className="mt-2 text-xs">
                 {balanceRemaining > 0 ? (
                   <span className="text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                    {lang === 'zh' ? `已付 $1,550 · 尚欠 $${balanceRemaining}` : `Paid $1,550 · $${balanceRemaining} Due`}
+                    {lang === 'zh' ? `已付 $${(currentCharge?.paidAmount || 0).toLocaleString()} · 尚欠 $${balanceRemaining}` : `Paid $${(currentCharge?.paidAmount || 0).toLocaleString()} · $${balanceRemaining} Due`}
                   </span>
                 ) : (
                   <span className="text-emerald-700 font-semibold">
@@ -201,10 +209,10 @@ export const TenantPortal: React.FC = () => {
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
               <span className="text-xs font-medium text-slate-500">{lang === 'zh' ? '当前报修单' : 'Active Work Order'}</span>
               <div className="text-base font-bold text-slate-900 mt-1 truncate">
-                WO-2026-089 · {lang === 'zh' ? '水管滴水' : 'Sink Leak'}
+                {myTickets[0] ? `${myTickets[0].ticketNumber} · ${myTickets[0].title}` : (lang === 'zh' ? '暂无进行中的报修' : 'No active ticket')}
               </div>
               <p className="text-xs text-amber-700 font-semibold mt-2">
-                {lang === 'zh' ? '状态: 维修中 · 预约周四 10:00 AM' : 'Status: In Progress · Thurs 10 AM'}
+                {myTickets[0] ? `${lang === 'zh' ? '状态' : 'Status'}: ${myTickets[0].status}` : ''}
               </p>
             </div>
           </div>
@@ -218,18 +226,18 @@ export const TenantPortal: React.FC = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
               <div>
                 <span className="text-slate-400 block">{lang === 'zh' ? '物业地址' : 'Address'}</span>
-                <strong className="text-slate-900 block mt-0.5">4720 Elmwood Terrace, Unit 2B</strong>
-                <span className="text-slate-500">Bethesda, MD 20814</span>
+                <strong className="text-slate-900 block mt-0.5">{myProp?.address || ''}, {myUnit?.unitNumber || ''}</strong>
+                <span className="text-slate-500">{myProp?.city || ''}, {myProp?.state || ''} {myProp?.zip || ''}</span>
               </div>
               <div>
                 <span className="text-slate-400 block">{lang === 'zh' ? '户型规格' : 'Layout'}</span>
-                <strong className="text-slate-900 block mt-0.5">2 Bed · 1.5 Bath · 1,050 sqft</strong>
-                <span className="text-slate-500">Townhouse Duplex</span>
+                <strong className="text-slate-900 block mt-0.5">{myUnit ? `${myUnit.bedrooms} Bed · ${myUnit.bathrooms} Bath · ${myUnit.sqft} sqft` : ''}</strong>
+                <span className="text-slate-500">{myProp?.type || ''}</span>
               </div>
               <div>
                 <span className="text-slate-400 block">{lang === 'zh' ? '租期' : 'Lease Term'}</span>
-                <strong className="text-slate-900 block mt-0.5">2025-11-01 ~ 2026-10-31</strong>
-                <span className="text-amber-600 font-semibold">{lang === 'zh' ? '剩余 13 天' : '13 days remaining'}</span>
+                <strong className="text-slate-900 block mt-0.5">{myTenancy ? `${myTenancy.startDate} ~ ${myTenancy.endDate}` : ''}</strong>
+                <span className="text-amber-600 font-semibold">{myTenancy ? (lang === 'zh' ? `剩余 ${Math.max(0, Math.ceil((new Date(myTenancy.endDate).getTime() - Date.now()) / 86400000))} 天` : `${Math.max(0, Math.ceil((new Date(myTenancy.endDate).getTime() - Date.now()) / 86400000))} days remaining`) : ''}</span>
               </div>
               <div>
                 <span className="text-slate-400 block">{lang === 'zh' ? '房东联系方式' : 'Landlord'}</span>
@@ -444,7 +452,7 @@ export const TenantPortal: React.FC = () => {
                 {lang === 'zh' ? '入住房屋初始状态检查 (Move-In Checklist)' : 'Move-In Inspection Baseline'}
               </h2>
               <p className="text-xs text-slate-500">
-                Unit 2B · {myInspection.scheduledDate} · {lang === 'zh' ? '带 SHA-256 照片防篡改记录' : 'Protected by SHA-256 Photo Proof'}
+                {myUnit?.unitNumber} · {myInspection.scheduledDate} · {lang === 'zh' ? '检查记录（照片哈希仅对真实上传文件有效，种子示例图不作为证据）' : 'Inspection record (photo hashes are only meaningful for real uploads, not seed sample images)'}
               </p>
             </div>
 
@@ -452,11 +460,11 @@ export const TenantPortal: React.FC = () => {
               {myInspection.tenantSigned ? (
                 <div className="flex items-center gap-1.5 text-xs text-emerald-700 font-semibold bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                  <span>{lang === 'zh' ? '您已于 2025-10-31 电子签署确认' : 'Signed by Emily Zhang'}</span>
+                  <span>{lang === 'zh' ? `您已于 ${myInspection.tenantSignedAt || ''} 电子签署确认` : `Signed by ${myInspection.tenantSignatureName || ''}`}</span>
                 </div>
               ) : (
                 <button
-                  onClick={() => signInspection(myInspection.id, 'tenant', 'Emily Zhang')}
+                  onClick={() => signInspection(myInspection.id, 'tenant', currentUser.name)}
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold"
                 >
                   {lang === 'zh' ? '确认并电子签署' : 'Sign & Certify'}
@@ -492,18 +500,20 @@ export const TenantPortal: React.FC = () => {
           </div>
 
           <div className="h-64 overflow-y-auto space-y-3 p-2 bg-slate-50 rounded-xl">
-            <div className="flex flex-col items-start text-xs">
-              <span className="text-[10px] text-slate-400 mb-0.5">David Miller</span>
-              <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-200 max-w-sm">
-                Thanks for flagging it promptly Emily! I reviewed the ticket and contacted Apex Plumbing. They have an opening this Thursday at 10:00 AM.
-              </div>
-            </div>
-            <div className="flex flex-col items-end text-xs">
-              <span className="text-[10px] text-slate-400 mb-0.5">You (Emily)</span>
-              <div className="p-3 bg-slate-900 text-white rounded-xl shadow-sm max-w-sm">
-                Hi David, thanks for following up on the sink leak! Apex Plumbing called for Thursday 10 AM. I will be working from home.
-              </div>
-            </div>
+            {myMessages.length === 0 && (
+              <p className="text-xs text-slate-400 p-3">{lang === 'zh' ? '暂无消息，发送第一条消息吧。' : 'No messages yet. Send the first one.'}</p>
+            )}
+            {myMessages.map(m => {
+              const mine = m.senderId === currentUser.id;
+              return (
+                <div key={m.id} className={`flex flex-col text-xs ${mine ? 'items-end' : 'items-start'}`}>
+                  <span className="text-[10px] text-slate-400 mb-0.5">{mine ? (lang === 'zh' ? '你' : 'You') : m.senderName} · {new Date(m.sentAt).toLocaleString()}</span>
+                  <div className={`p-3 rounded-xl shadow-sm max-w-sm ${mine ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200'}`}>
+                    {m.body}
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           <form onSubmit={handleSendChat} className="flex gap-2">
@@ -512,11 +522,11 @@ export const TenantPortal: React.FC = () => {
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
               placeholder="Type message to landlord..."
-              className="flex-1 text-xs p-2.5 border border-slate-300 rounded-xl"
+              className="flex-1 text-xs p-2.5 min-h-[44px] border border-slate-300 rounded-xl"
             />
             <button
               type="submit"
-              className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5"
+              className="px-4 py-2 min-h-[44px] bg-slate-900 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5"
             >
               <Send className="w-3.5 h-3.5" />
               <span>{t('sendMessage')}</span>

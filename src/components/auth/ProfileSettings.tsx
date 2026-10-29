@@ -23,6 +23,7 @@ export const ProfileSettings: React.FC = () => {
     currentUser,
     currentRole,
     updateUserProfile,
+    changePassword,
     authAuditEvents,
     logout,
     setActiveRoute,
@@ -55,12 +56,12 @@ export const ProfileSettings: React.FC = () => {
     setLang(preferredLanguage);
   };
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError(null);
     setPasswordSuccess(false);
 
-    if (newPassword.length < 8) {
+    if (newPassword.length < 8 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
       setPasswordError(t('passwordRequirement'));
       return;
     }
@@ -68,7 +69,16 @@ export const ProfileSettings: React.FC = () => {
       setPasswordError(t('passwordsDoNotMatch'));
       return;
     }
+    if (!currPassword) {
+      setPasswordError(lang === 'zh' ? '请输入当前密码' : 'Please enter your current password');
+      return;
+    }
 
+    const res = await changePassword(currPassword, newPassword);
+    if (!res.success) {
+      setPasswordError(res.error || 'currentPasswordIncorrect');
+      return;
+    }
     setPasswordSuccess(true);
     setCurrPassword('');
     setNewPassword('');

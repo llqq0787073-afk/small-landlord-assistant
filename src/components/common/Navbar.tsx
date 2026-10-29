@@ -14,18 +14,18 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
   const { currentRole, setCurrentRole, currentUser } = useAppStore();
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
 
-  const roles: { role: UserRole; labelEn: string; labelZh: string; descEn: string; descZh: string }[] = [
+  const allRoles: { role: UserRole; labelEn: string; labelZh: string; descEn: string; descZh: string }[] = [
     {
       role: 'landlord',
-      labelEn: 'Landlord (David M.)',
-      labelZh: '房东 (David M. - 5套单元)',
+      labelEn: 'Landlord',
+      labelZh: '房东',
       descEn: 'Full portfolio, rent ledger, legal resources',
       descZh: '资产全览、租金分类账、法规中心'
     },
     {
       role: 'tenant',
-      labelEn: 'Tenant (Emily Z.)',
-      labelZh: '租客 (Emily Z. - 2B单元)',
+      labelEn: 'Tenant',
+      labelZh: '租客',
       descEn: 'Lease view, rent payment, repair ticket',
       descZh: '查租约、租金支付、报修申请'
     },
@@ -41,7 +41,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between gap-8 h-16">
+        <div className="flex items-center justify-between gap-2 sm:gap-8 h-16">
           {/* Zone 1: Single text wordmark */}
           <div className="flex items-center gap-3 shrink-0">
             <button
@@ -52,7 +52,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                 <Building2 className="w-5 h-5 text-indigo-400" />
               </div>
               <div className="flex flex-col">
-                <span className="text-base font-bold tracking-tight text-slate-900 whitespace-nowrap">
+                <span className="text-sm sm:text-base font-bold tracking-tight text-slate-900 whitespace-nowrap">
                   {lang === 'zh' ? '小房东管理助手' : 'Small Landlord Assistant'}
                 </span>
                 <span className="text-[11px] text-slate-500 hidden sm:inline whitespace-nowrap">
@@ -106,6 +106,22 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                   }`}
                 >
                   {t('navMaintenance')}
+                </button>
+                <button
+                  onClick={() => setActiveTab('tasks')}
+                  className={`hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 pb-0.5 ${
+                    activeTab === 'tasks' ? 'text-slate-900 font-semibold border-b-2 border-slate-900' : ''
+                  }`}
+                >
+                  {t('navTasks')}
+                </button>
+                <button
+                  onClick={() => setActiveTab('messages')}
+                  className={`hover:text-slate-900 transition-colors whitespace-nowrap shrink-0 pb-0.5 ${
+                    activeTab === 'messages' ? 'text-slate-900 font-semibold border-b-2 border-slate-900' : ''
+                  }`}
+                >
+                  {t('navMessages')}
                 </button>
                 <button
                   onClick={() => setActiveTab('inspections')}
@@ -226,7 +242,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab }) => {
                     </p>
                   </div>
                   <div className="py-1">
-                    {roles.map(r => (
+                    {(allRoles.filter(r => (currentUser.roles || []).includes(r.role))).map(r => (
                       <button
                         key={r.role}
                         onClick={() => {

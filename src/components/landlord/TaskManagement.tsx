@@ -16,21 +16,22 @@ import {
 
 export const TaskManagement: React.FC = () => {
   const { t, lang } = useI18n();
-  const { tasks, toggleTaskStatus, addTask, properties, units } = useAppStore();
+  const { tasks, toggleTaskStatus, addTask, properties, units, currentUser } = useAppStore();
   const [filter, setFilter] = useState<'all' | 'today' | 'overdue' | 'next_7_days'>('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newDesc, setNewDesc] = useState('');
-  const [newDueDate, setNewDueDate] = useState('2026-10-22');
+  const [newDueDate, setNewDueDate] = useState(new Date().toISOString().slice(0, 10));
   const [newPriority, setNewPriority] = useState<TaskPriority>('medium');
   const [newPropId, setNewPropId] = useState('');
 
-  const today = '2026-10-18';
+  const today = new Date().toISOString().slice(0, 10);
+  const next7 = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
 
   const filteredTasks = tasks.filter(task => {
     if (filter === 'today') return task.dueDate === today;
     if (filter === 'overdue') return task.dueDate < today && task.status !== 'completed';
-    if (filter === 'next_7_days') return task.dueDate >= today && task.dueDate <= '2026-10-25';
+    if (filter === 'next_7_days') return task.dueDate >= today && task.dueDate <= next7;
     return true;
   });
 
@@ -45,7 +46,7 @@ export const TaskManagement: React.FC = () => {
       dueDate: newDueDate,
       priority: newPriority,
       status: 'todo',
-      assigneeName: 'David Miller'
+      assigneeName: currentUser.name || 'Landlord'
     });
 
     setModalOpen(false);
@@ -182,7 +183,7 @@ export const TaskManagement: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <form
             onSubmit={handleCreateTask}
-            className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95"
+            className="bg-white rounded-2xl modal-scroll max-w-md w-full max-h-[90dvh] overflow-y-auto p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95"
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-bold text-slate-900 text-base">

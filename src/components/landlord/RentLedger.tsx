@@ -26,10 +26,12 @@ export const RentLedger: React.FC<RentLedgerProps> = ({ openRecordPaymentModal }
     payments,
     units,
     tenancies,
+    adjustments,
     addLedgerAdjustment
   } = useAppStore();
 
-  const [selectedMonth, setSelectedMonth] = useState('2026-10');
+  const availableMonths = Array.from(new Set(rentCharges.map(c => c.billingMonth))).sort().reverse();
+  const [selectedMonth, setSelectedMonth] = useState(availableMonths[0] || new Date().toISOString().slice(0, 7));
   const [selectedReceipt, setSelectedReceipt] = useState<RentPayment | null>(null);
   const [adjustmentModalOpen, setAdjustmentModalOpen] = useState(false);
   const [adjustChargeId, setAdjustChargeId] = useState('');
@@ -132,7 +134,7 @@ export const RentLedger: React.FC<RentLedgerProps> = ({ openRecordPaymentModal }
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Total Expected */}
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-          <span className="text-xs font-medium text-slate-500">{lang === 'zh' ? '10月应收租金 (Due)' : 'October Rent Due'}</span>
+          <span className="text-xs font-medium text-slate-500">{lang === 'zh' ? `${selectedMonth} 应收租金 (Due)` : `${selectedMonth} Rent Due`}</span>
           <div className="text-2xl font-bold text-slate-900 tabular-nums mt-1">
             ${totalExpected.toLocaleString()}
           </div>
@@ -160,7 +162,9 @@ export const RentLedger: React.FC<RentLedgerProps> = ({ openRecordPaymentModal }
             ${totalBalance.toLocaleString()}
           </div>
           <p className="text-xs text-amber-600 mt-1 font-medium">
-            {lang === 'zh' ? 'Unit 2B (张晓雯) 尚余 $650' : 'Unit 2B (Emily Zhang) $650 due'}
+            {monthlyCharges.filter(c => c.status === 'overdue').length > 0
+              ? (lang === 'zh' ? `${monthlyCharges.filter(c => c.status === 'overdue').length} 笔已逾期` : `${monthlyCharges.filter(c => c.status === 'overdue').length} overdue`)
+              : (lang === 'zh' ? '本月无逾期账单' : 'No overdue charges this month')}
           </p>
         </div>
       </div>
@@ -170,7 +174,7 @@ export const RentLedger: React.FC<RentLedgerProps> = ({ openRecordPaymentModal }
         <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-sm font-bold text-slate-900">
-              {lang === 'zh' ? '租金应收明细表 · 2026年10月' : 'Monthly Rent Ledger · October 2026'}
+              {lang === 'zh' ? `租金应收明细表 · ${selectedMonth}` : `Monthly Rent Ledger · ${selectedMonth}`}
             </h2>
             <p className="text-xs text-slate-500">
               {lang === 'zh' ? '包含部分付款与未付差额跟踪' : 'Detailed charges, receipts, balances, and payment sources'}
@@ -182,11 +186,10 @@ export const RentLedger: React.FC<RentLedgerProps> = ({ openRecordPaymentModal }
             <select
               value={selectedMonth}
               onChange={e => setSelectedMonth(e.target.value)}
-              className="text-xs bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-800 font-medium"
+              className="text-xs bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 min-h-[44px] text-slate-800 font-medium"
             >
-              <option value="2026-10">October 2026 (Current)</option>
-              <option value="2026-09">September 2026</option>
-              <option value="2026-08">August 2026</option>
+              {availableMonths.map(m => (<option key={m} value={m}>{m}</option>))}
+              {!availableMonths.includes(selectedMonth) && <option value={selectedMonth}>{selectedMonth}</option>}
             </select>
           </div>
         </div>
@@ -195,7 +198,7 @@ export const RentLedger: React.FC<RentLedgerProps> = ({ openRecordPaymentModal }
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 font-semibold">
               <tr>
-                <th className="px-4 py-3">{t('unit')}</th>
+                <th className="px-4 py-3 sticky left-0 bg-slate-50 z-10">{t('unit')}</th>
                 <th className="px-4 py-3">{t('tenant')}</th>
                 <th className="px-4 py-3 text-right">{t('expectedAmount')}</th>
                 <th className="px-4 py-3 text-right">{t('receivedAmount')}</th>
@@ -214,7 +217,7 @@ export const RentLedger: React.FC<RentLedgerProps> = ({ openRecordPaymentModal }
 
                 return (
                   <tr key={chg.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="px-4 py-3 font-semibold text-slate-900">
+                    <td className="px-4 py-3 font-semibold text-slate-900 sticky left-0 bg-white z-10">
                       {u?.unitNumber}
                     </td>
                     <td className="px-4 py-3">
@@ -250,13 +253,19 @@ export const RentLedger: React.FC<RentLedgerProps> = ({ openRecordPaymentModal }
                             {lang === 'zh' ? '部分付款 (Partial)' : 'Partial Payment'}
                           </span>
                           <span className="text-[10px] text-amber-600 block">
-                            {lang === 'zh' ? '剩余应收 $650' : 'Remaining $650'}
+                            {lang === 'zh' ? `剩余应收 $${bal.toLocaleString()}` : `Remaining $${bal.toLocaleString()}`}
                           </span>
                         </div>
                       )}
                       {chg.status === 'unpaid' && (
                         <span className="text-rose-600 font-semibold">
                           {lang === 'zh' ? '未付款' : 'Unpaid'}
+                        </span>
+                      )}
+                      {chg.status === 'overdue' && (
+                        <span className="inline-flex items-center gap-1 text-rose-700 font-semibold">
+                          <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
+                          {lang === 'zh' ? `已逾期（到期 ${chg.dueDate}，剩余 $${bal.toLocaleString()}）` : `Overdue (due ${chg.dueDate}, $${bal.toLocaleString()} left)`}
                         </span>
                       )}
                     </td>
@@ -341,10 +350,41 @@ export const RentLedger: React.FC<RentLedgerProps> = ({ openRecordPaymentModal }
         </div>
       </div>
 
+      {/* Ledger Adjustment History — previously invisible */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <h3 className="text-sm font-bold text-slate-900 mb-2">
+          {lang === 'zh' ? '账本调整历史' : 'Ledger Adjustment History'}
+        </h3>
+        <p className="text-xs text-slate-500 mb-4">
+          {lang === 'zh' ? '每一次调整都记录金额、原因、记录人和日期，并同步写入审计日志。' : 'Every adjustment records amount, reason, recorder and date, and is also written to the audit log.'}
+        </p>
+        {adjustments.length === 0 ? (
+          <p className="text-xs text-slate-400">{lang === 'zh' ? '暂无调整记录' : 'No adjustments yet'}</p>
+        ) : (
+          <div className="divide-y divide-slate-100 text-xs">
+            {adjustments.map(adj => {
+              const chg = rentCharges.find(c => c.id === adj.chargeId);
+              const u = units.find(unit => unit.id === chg?.unitId);
+              return (
+                <div key={adj.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <strong className="text-slate-900">{u?.unitNumber || chg?.unitId} · {adj.reason}</strong>
+                    <span className="text-slate-500 block">{adj.date} · {lang === 'zh' ? '记录人' : 'Recorded by'} {adj.recordedBy} · {lang === 'zh' ? '账单' : 'Charge'} {adj.chargeId}</span>
+                  </div>
+                  <span className={`font-bold tabular-nums ${adj.amount >= 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                    {adj.amount >= 0 ? '+' : ''}${adj.amount.toLocaleString()}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Receipt Modal */}
       {selectedReceipt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95">
+          <div className="bg-white rounded-2xl modal-scroll max-w-md w-full max-h-[90dvh] overflow-y-auto p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
                 <Receipt className="w-5 h-5 text-indigo-600" />
@@ -417,7 +457,7 @@ export const RentLedger: React.FC<RentLedgerProps> = ({ openRecordPaymentModal }
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <form
             onSubmit={handleCreateAdjustment}
-            className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95"
+            className="bg-white rounded-2xl modal-scroll max-w-md w-full max-h-[90dvh] overflow-y-auto p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95"
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-bold text-slate-900 text-base">

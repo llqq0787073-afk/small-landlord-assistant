@@ -264,11 +264,11 @@ export const LandingPage: React.FC = () => {
                 className="p-3 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 rounded-xl text-left transition-all group"
               >
                 <div className="flex items-center justify-between text-xs font-semibold text-amber-300">
-                  <span>{lang === 'zh' ? '管理员 (需MFA)' : 'Admin (MFA)'}</span>
+                  <span>{lang === 'zh' ? '管理员' : 'Admin'}</span>
                   <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                 </div>
                 <p className="text-xs text-slate-200 font-medium mt-1">Sarah Lin</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">TOTP Code: 123456</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Password login (MFA not implemented)</p>
               </button>
 
               <button

@@ -35,7 +35,7 @@ export const LandlordRegister: React.FC = () => {
   const hasNumber = /[0-9]/.test(password);
   const passwordsMatch = password === confirmPassword && password.length > 0;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -66,14 +66,11 @@ export const LandlordRegister: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      const res = registerLandlord(fullName.trim(), email.trim(), password);
-      setIsSubmitting(false);
-
-      if (!res.success) {
-        setErrorMessage(res.error ? t(res.error) : 'Registration failed');
-      }
-    }, 600);
+    const res = await registerLandlord(fullName.trim(), email.trim(), password);
+    setIsSubmitting(false);
+    if (!res.success) {
+      setErrorMessage(res.error ? t(res.error) : 'Registration failed');
+    }
   };
 
   return (

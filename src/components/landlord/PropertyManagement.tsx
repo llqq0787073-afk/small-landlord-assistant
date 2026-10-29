@@ -82,8 +82,8 @@ export const PropertyManagement: React.FC<PropertyManagementProps> = ({
           </h1>
           <p className="text-xs md:text-sm text-slate-500 mt-1">
             {lang === 'zh'
-              ? '当前统计：3 处独立物业 (Properties) · 5 套出租单元 (Units)。SaaS 订阅计费按单元数计算。'
-              : 'Current Portfolio: 3 Properties · 5 Rental Units. Subscription tier calculated on units cap.'}
+              ? `当前统计：${properties.length} 处独立物业 (Properties) · ${units.length} 套出租单元 (Units)。`
+              : `Current Portfolio: ${properties.length} Properties · ${units.length} Rental Units.`}
           </p>
         </div>
 
@@ -106,7 +106,7 @@ export const PropertyManagement: React.FC<PropertyManagementProps> = ({
             onChange={e => setSelectedPropertyId(e.target.value)}
             className="text-xs bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-800 font-medium focus:outline-none focus:ring-1 focus:ring-slate-900"
           >
-            <option value="all">{lang === 'zh' ? '全部物业 (3 处)' : 'All Properties (3)'}</option>
+            <option value="all">{lang === 'zh' ? `全部物业 (${properties.length} 处)` : `All Properties (${properties.length})`}</option>
             {properties.map(p => (
               <option key={p.id} value={p.id}>
                 {p.name} ({p.state})
@@ -131,7 +131,7 @@ export const PropertyManagement: React.FC<PropertyManagementProps> = ({
               statusFilter === 'occupied' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            {lang === 'zh' ? '已出租' : 'Occupied'} (4)
+            {lang === 'zh' ? '已出租' : 'Occupied'} ({units.filter(u => u.status === 'occupied').length})
           </button>
           <button
             onClick={() => setStatusFilter('vacant')}
@@ -139,7 +139,7 @@ export const PropertyManagement: React.FC<PropertyManagementProps> = ({
               statusFilter === 'vacant' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            {lang === 'zh' ? '空置中' : 'Vacant'} (1)
+            {lang === 'zh' ? '空置中' : 'Vacant'} ({units.filter(u => u.status === 'vacant').length})
           </button>
         </div>
       </div>

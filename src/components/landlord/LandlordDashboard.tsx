@@ -13,7 +13,9 @@ import {
   FileCheck,
   TrendingUp,
   ShieldAlert,
-  Activity
+  Activity,
+  CheckSquare,
+  MessageSquare
 } from 'lucide-react';
 
 interface LandlordDashboardProps {
@@ -37,26 +39,30 @@ export const LandlordDashboard: React.FC<LandlordDashboardProps> = ({
     payments,
     maintenanceTickets,
     tasks,
-    tenancies
+    tenancies,
+    currentUser
   } = useAppStore();
 
   const totalUnits = units.length;
   const occupiedUnits = units.filter(u => u.status === 'occupied').length;
   const vacantUnits = totalUnits - occupiedUnits;
 
-  // Rent figures for current month
-  const octCharges = rentCharges.filter(c => c.billingMonth === '2026-10');
+  // Rent figures for the actual current month (not a hardcoded month)
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const octCharges = rentCharges.filter(c => c.billingMonth === currentMonth);
   const expectedRent = octCharges.reduce((acc, c) => acc + c.amount, 0);
   const collectedRent = octCharges.reduce((acc, c) => acc + c.paidAmount, 0);
+  const partialCount = octCharges.filter(c => c.status === 'partial' || c.status === 'overdue').length;
   const balanceRemaining = Math.max(0, expectedRent - collectedRent);
 
   // Active tickets
   const openRepairs = maintenanceTickets.filter(t => t.status !== 'closed' && t.status !== 'completed').length;
   const emergencyTickets = maintenanceTickets.filter(t => t.priority === 'emergency' && t.status !== 'closed');
 
-  // Expiring leases in next 30-60 days
+  // Expiring leases: end date within the next 60 days from today
   const expiringTenancies = tenancies.filter(ten => {
-    return ten.endDate.startsWith('2026-10') || ten.endDate.startsWith('2026-11');
+    const diffDays = (new Date(ten.endDate).getTime() - new Date().getTime()) / 86400000;
+    return diffDays >= 0 && diffDays <= 60;
   });
 
   return (
@@ -70,16 +76,16 @@ export const LandlordDashboard: React.FC<LandlordDashboardProps> = ({
             </span>
             <span className="text-slate-400 text-xs">·</span>
             <span className="text-xs text-slate-300">
-              {lang === 'zh' ? '管理 3 处物业 / 5 套出租单元' : '3 Properties / 5 Rental Units'}
+              {lang === 'zh' ? `管理 ${properties.length} 处物业 / ${totalUnits} 套出租单元` : `${properties.length} Properties / ${totalUnits} Rental Units`}
             </span>
           </div>
           <h1 className="text-xl md:text-2xl font-bold mt-1 text-white">
-            {lang === 'zh' ? '欢迎回来，David Miller' : 'Welcome back, David Miller'}
+            {lang === 'zh' ? `欢迎回来，${currentUser.name || ''}` : `Welcome back, ${currentUser.name || ''}`}
           </h1>
           <p className="text-xs md:text-sm text-slate-400 mt-1 max-w-xl">
             {lang === 'zh'
-              ? '本月租金已收 $10,450 (收缴率 94%)，当前有 1 笔部分付款待结，2 个维修工单处理中。'
-              : 'Current month collection is at 94%. You have 1 partial rent balance and 2 open work orders.'}
+              ? `本月租金已收 $${collectedRent.toLocaleString()}（收缴率 ${expectedRent ? Math.round((collectedRent / expectedRent) * 100) : 0}%），当前有 ${partialCount} 笔未结清，${openRepairs} 个维修工单处理中。`
+              : `Current month collection is $${collectedRent.toLocaleString()} (${expectedRent ? Math.round((collectedRent / expectedRent) * 100) : 0}%). You have ${partialCount} outstanding balances and ${openRepairs} open work orders.`}
           </p>
         </div>
 
@@ -228,6 +234,20 @@ export const LandlordDashboard: React.FC<LandlordDashboardProps> = ({
           >
             <Wrench className="w-4 h-4 text-sky-600" />
             <span>{t('actionNewRepair')}</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('tasks')}
+            className="flex items-center justify-center gap-2 p-3 min-h-[44px] text-xs font-semibold text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-all"
+          >
+            <CheckSquare className="w-4 h-4 text-amber-600" />
+            <span>{t('navTasks')}</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('messages')}
+            className="flex items-center justify-center gap-2 p-3 min-h-[44px] text-xs font-semibold text-slate-800 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-all"
+          >
+            <MessageSquare className="w-4 h-4 text-teal-600" />
+            <span>{t('navMessages')}</span>
           </button>
           <button
             onClick={() => setActiveTab('inspections')}

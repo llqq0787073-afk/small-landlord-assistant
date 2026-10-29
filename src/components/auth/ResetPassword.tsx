@@ -25,7 +25,7 @@ export const ResetPassword: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -34,7 +34,7 @@ export const ResetPassword: React.FC = () => {
       return;
     }
 
-    if (newPassword.length < 8) {
+    if (newPassword.length < 8 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
       setErrorMessage(t('passwordRequirement'));
       return;
     }
@@ -45,14 +45,11 @@ export const ResetPassword: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      const res = resetPasswordWithToken(token.trim(), newPassword);
-      setIsSubmitting(false);
-
-      if (!res.success && res.error) {
-        setErrorMessage(res.error);
-      }
-    }, 500);
+    const res = await resetPasswordWithToken(token.trim(), newPassword);
+    setIsSubmitting(false);
+    if (!res.success && res.error) {
+      setErrorMessage(res.error);
+    }
   };
 
   return (
@@ -113,7 +110,7 @@ export const ResetPassword: React.FC = () => {
                   required
                   value={token}
                   onChange={e => setToken(e.target.value)}
-                  placeholder="rst_XXXXXXXX"
+                  placeholder="Paste the one-time reset token"
                   className="block w-full pl-9 pr-3 py-2 text-sm font-mono border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-slate-900 placeholder:text-slate-400 font-bold"
                 />
               </div>

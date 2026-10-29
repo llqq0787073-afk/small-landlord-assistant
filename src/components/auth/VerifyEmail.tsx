@@ -13,21 +13,30 @@ import {
 
 export const VerifyEmail: React.FC = () => {
   const { t, lang, setLang } = useI18n();
-  const { pendingVerificationEmail, verifyEmail, setActiveRoute } = useAppStore();
+  const { pendingVerificationEmail, verifyEmail, resendVerification, setActiveRoute } = useAppStore();
 
-  const targetEmail = pendingVerificationEmail || 'david.miller@rentals.com';
+  const [email, setEmail] = useState(pendingVerificationEmail || '');
+  const targetEmail = email;
+  const [token, setToken] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [resendSent, setResendSent] = useState(false);
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
+    if (!targetEmail.trim() || !token.trim()) {
+      setErrorMessage(lang === 'zh' ? '请输入邮箱和一次性验证令牌' : 'Enter your email and the one-time verification token');
+      return;
+    }
+    setErrorMessage(null);
     setIsVerifying(true);
-    setTimeout(() => {
-      verifyEmail(targetEmail);
-      setIsVerifying(false);
-    }, 600);
+    const res = await verifyEmail(targetEmail.trim(), token.trim());
+    setIsVerifying(false);
+    if (!res.success) setErrorMessage(res.error || 'invalidVerificationToken');
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
+    if (!targetEmail.trim()) return;
+    await resendVerification(targetEmail.trim());
     setResendSent(true);
     setTimeout(() => setResendSent(false), 5000);
   };
@@ -66,9 +75,11 @@ export const VerifyEmail: React.FC = () => {
         </p>
 
         <div className="mt-3 text-center">
-          <span className="inline-flex items-center gap-1.5 text-xs font-mono font-semibold text-indigo-900 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg">
-            {targetEmail}
-          </span>
+          {targetEmail ? (
+            <span className="inline-flex items-center gap-1.5 text-xs font-mono font-semibold text-indigo-900 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg">
+              {targetEmail}
+            </span>
+          ) : null}
         </div>
       </div>
 
@@ -93,14 +104,32 @@ export const VerifyEmail: React.FC = () => {
             </div>
           )}
 
+          {errorMessage && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700">{errorMessage}</div>
+          )}
           <div className="space-y-3">
+            <input
+              type="email" value={targetEmail} onChange={e => setEmail(e.target.value)}
+              placeholder="your.email@example.com"
+              className="block w-full px-3 py-3 min-h-[44px] text-sm border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+            />
+            <input
+              type="text" value={token} onChange={e => setToken(e.target.value)}
+              placeholder={lang === 'zh' ? '一次性验证令牌（本地开发见后端终端日志）' : 'One-time verification token (local dev: backend terminal log)'}
+              className="block w-full px-3 py-3 min-h-[44px] text-sm font-mono border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500"
+            />
+            <p className="text-[11px] text-slate-500">
+              {lang === 'zh'
+                ? '验证令牌不会在页面上自动显示，也不会被默认填入任何账号。本地开发时令牌打印在后端终端中，生产环境应通过邮件发送。'
+                : 'The token is never auto-displayed and no account is assumed. In local development it is printed to the backend terminal; in production it must be emailed.'}
+            </p>
             <button
               onClick={handleVerify}
               disabled={isVerifying}
-              className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white rounded-xl text-sm font-semibold transition-all shadow-sm flex items-center justify-center gap-2"
+              className="w-full py-3 px-4 min-h-[44px] bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white rounded-xl text-sm font-semibold transition-all shadow-sm flex items-center justify-center gap-2"
             >
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>{isVerifying ? t('loading') : t('simulateEmailVerifyBtn')}</span>
+              <span>{isVerifying ? t('loading') : (lang === 'zh' ? '用令牌验证邮箱' : 'Verify email with token')}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
 

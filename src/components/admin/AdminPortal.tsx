@@ -102,7 +102,7 @@ export const AdminPortal: React.FC = () => {
             </h2>
             <p className="text-xs text-slate-500">
               {lang === 'zh'
-                ? `当前 David Miller 账户订阅: ${currentPlan.nameZh}（当前 5 套单元 / 上限 ${currentPlan.unitLimit} 套）`
+                ? `当前订阅: ${currentPlan.nameZh}（当前 ${totalUnits} 套单元 / 上限 ${currentPlan.unitLimit} 套）`
                 : `Active Subscription: ${currentPlan.nameEn} (${totalUnits} / ${currentPlan.unitLimit} Units Used)`}
             </p>
           </div>

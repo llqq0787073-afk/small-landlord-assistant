@@ -16,11 +16,11 @@ export const ForgotPassword: React.FC = () => {
   const { requestPasswordReset, setActiveRoute } = useAppStore();
 
   const [email, setEmail] = useState('david.miller@rentals.com');
-  const [tokenGenerated, setTokenGenerated] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -30,16 +30,16 @@ export const ForgotPassword: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      const res = requestPasswordReset(email.trim());
-      setIsSubmitting(false);
-
-      if (res.success && res.token) {
-        setTokenGenerated(res.token);
-      } else {
-        setErrorMessage(res.error || 'Failed to dispatch reset link');
-      }
-    }, 500);
+    const res = await requestPasswordReset(email.trim());
+    setIsSubmitting(false);
+    if (res.success) {
+      // Deliberately generic: the server never returns a token, and the
+      // page never displays one. In local dev the token is in the backend
+      // terminal log; in production it must be emailed.
+      setSent(true);
+    } else {
+      setErrorMessage(res.error || 'Failed to dispatch reset link');
+    }
   };
 
   return (
@@ -85,16 +85,18 @@ export const ForgotPassword: React.FC = () => {
             </div>
           )}
 
-          {tokenGenerated ? (
+          {sent ? (
             <div className="space-y-4">
               <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 space-y-2">
                 <div className="flex items-center gap-2 font-semibold">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   <span>{t('resetEmailSent')}</span>
                 </div>
-                <div className="p-2.5 bg-white border border-emerald-200 rounded-lg font-mono text-center text-sm font-bold text-slate-800">
-                  {tokenGenerated}
-                </div>
+                <p className="text-[11px] text-emerald-700">
+                  {lang === 'zh'
+                    ? '令牌已生成（有效期 2 小时，一次性使用），不会在此页面显示。本地开发时请查看后端终端日志，生产环境请通过邮件获取。'
+                    : 'A one-time token was generated (valid 2 hours, single use) and is never shown on this page. In local development, check the backend terminal log; in production it is emailed.'}
+                </p>
                 <p className="text-[11px] text-emerald-700">
                   {lang === 'zh'
                     ? '有效期 2 小时。点击下方按钮立即完成新密码设置。'

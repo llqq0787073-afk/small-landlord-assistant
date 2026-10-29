@@ -27,7 +27,7 @@ export const MaintenanceTracker: React.FC<MaintenanceTrackerProps> = ({ openNewM
   const { maintenanceTickets, updateTicketStatus, properties, units } = useAppStore();
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [activeTicket, setActiveTicket] = useState<MaintenanceTicket | null>(null);
-  const [resolveCost, setResolveCost] = useState<number>(0);
+  const [resolveCost, setResolveCost] = useState<number | undefined>(undefined);
   const [resolveNotes, setResolveNotes] = useState<string>('');
 
   const filteredTickets = filterStatus === 'all'
@@ -76,7 +76,8 @@ export const MaintenanceTracker: React.FC<MaintenanceTrackerProps> = ({ openNewM
   const handleResolveCommit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeTicket) return;
-    updateTicketStatus(activeTicket.id, 'completed', resolveNotes, resolveCost || activeTicket.estimatedCost || 0);
+    // Blank means unknown, NOT the estimate: the server keeps actualCost undefined.
+    updateTicketStatus(activeTicket.id, 'completed', resolveNotes, resolveCost);
     setActiveTicket(null);
     setResolveCost(0);
     setResolveNotes('');
@@ -195,7 +196,7 @@ export const MaintenanceTracker: React.FC<MaintenanceTrackerProps> = ({ openNewM
                     <button
                       onClick={() => {
                         setActiveTicket(ticket);
-                        setResolveCost(ticket.estimatedCost || 150);
+                        setResolveCost(undefined);
                       }}
                       className="px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors shadow-sm"
                     >
@@ -265,7 +266,7 @@ export const MaintenanceTracker: React.FC<MaintenanceTrackerProps> = ({ openNewM
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <form
             onSubmit={handleResolveCommit}
-            className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95"
+            className="bg-white rounded-2xl modal-scroll max-w-md w-full max-h-[90dvh] overflow-y-auto p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95"
           >
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-bold text-slate-900 text-base">
@@ -288,8 +289,8 @@ export const MaintenanceTracker: React.FC<MaintenanceTrackerProps> = ({ openNewM
                 <input
                   type="number"
                   required
-                  value={resolveCost || ''}
-                  onChange={e => setResolveCost(Number(e.target.value))}
+                  value={resolveCost ?? ''}
+                  onChange={e => setResolveCost(e.target.value === '' ? undefined : Number(e.target.value))}
                   placeholder="e.g. 180"
                   className="w-full p-2 border border-slate-300 rounded-lg font-mono tabular-nums"
                 />

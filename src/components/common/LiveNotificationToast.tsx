@@ -17,7 +17,7 @@ export const LiveNotificationToast: React.FC = () => {
   if (!toastMessage) return null;
 
   return (
-    <div className="fixed bottom-20 md:bottom-6 right-4 z-50 max-w-sm w-full bg-slate-900 text-white rounded-xl shadow-2xl border border-slate-800 p-4 transition-all animate-in fade-in slide-in-from-bottom-4">
+    <div className="fixed bottom-20 md:bottom-6 left-4 right-4 sm:left-auto z-50 sm:max-w-sm bg-slate-900 text-white rounded-xl shadow-2xl border border-slate-800 p-4 transition-all animate-in fade-in slide-in-from-bottom-4">
       <div className="flex items-start gap-3">
         {toastMessage.type === 'success' && (
           <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
@@ -33,7 +33,7 @@ export const LiveNotificationToast: React.FC = () => {
         </div>
         <button
           onClick={clearToast}
-          className="text-slate-400 hover:text-white transition-colors p-1"
+          className="text-slate-400 hover:text-white transition-colors p-1 min-h-[44px] min-w-[44px] flex items-center justify-center"
           aria-label="Close notification"
         >
           <X className="w-4 h-4" />

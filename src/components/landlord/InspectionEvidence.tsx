@@ -26,9 +26,10 @@ export const InspectionEvidence: React.FC = () => {
   const [signatureName, setSignatureName] = useState<string>(currentUser.name);
 
   const currentInspection = inspections.find(i => i.id === selectedInspectionId) || inspections[0];
+  const inspectionLocked = !!(currentInspection?.landlordSigned && currentInspection?.tenantSigned);
 
   const handleConditionChange = (itemId: string, newCondition: RoomCondition) => {
-    if (!currentInspection) return;
+    if (!currentInspection || inspectionLocked) return;
     const item = currentInspection.items.find(i => i.id === itemId);
     if (!item) return;
 
@@ -37,7 +38,7 @@ export const InspectionEvidence: React.FC = () => {
   };
 
   const handleNotesChange = (itemId: string, notes: string) => {
-    if (!currentInspection) return;
+    if (!currentInspection || inspectionLocked) return;
     const item = currentInspection.items.find(i => i.id === itemId);
     if (!item) return;
     updateInspectionItem(currentInspection.id, itemId, item.condition, notes, item.wearTearCategory);
@@ -52,8 +53,8 @@ export const InspectionEvidence: React.FC = () => {
             <h1 className="text-xl md:text-2xl font-bold text-slate-900 tracking-tight">
               {t('inspectionsTitle')}
             </h1>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-indigo-50 text-indigo-800 border border-indigo-200">
-              SHA-256 Validated
+            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+              {lang === 'zh' ? '种子示例图：哈希不作为真实证据' : 'Seed sample images: hashes are not real evidence'}
             </span>
           </div>
           <p className="text-xs md:text-sm text-slate-500 mt-1 max-w-2xl">
@@ -124,13 +125,15 @@ export const InspectionEvidence: React.FC = () => {
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                     <span>{currentInspection.landlordSignatureName}</span>
                   </div>
-                ) : (
+                ) : currentRole === 'landlord' ? (
                   <button
                     onClick={() => signInspection(currentInspection.id, 'landlord', currentUser.name)}
-                    className="text-indigo-600 font-semibold hover:underline mt-0.5"
+                    className="text-indigo-600 font-semibold hover:underline mt-0.5 min-h-[44px]"
                   >
                     {lang === 'zh' ? '点击电子签署' : 'Click to Sign'}
                   </button>
+                ) : (
+                  <span className="text-slate-500 mt-0.5 block">{lang === 'zh' ? '等待房东签署' : 'Waiting for landlord'}</span>
                 )}
               </div>
 
@@ -142,13 +145,15 @@ export const InspectionEvidence: React.FC = () => {
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                     <span>{currentInspection.tenantSignatureName}</span>
                   </div>
-                ) : (
+                ) : currentRole === 'tenant' ? (
                   <button
                     onClick={() => signInspection(currentInspection.id, 'tenant', currentUser.name)}
-                    className="text-indigo-600 font-semibold hover:underline mt-0.5"
+                    className="text-indigo-600 font-semibold hover:underline mt-0.5 min-h-[44px]"
                   >
-                    {lang === 'zh' ? '等待租客签署' : 'Pending Signature'}
+                    {lang === 'zh' ? '点击电子签署' : 'Click to Sign'}
                   </button>
+                ) : (
+                  <span className="text-slate-500 mt-0.5 block">{lang === 'zh' ? '等待租客签署' : 'Waiting for tenant'}</span>
                 )}
               </div>
             </div>
@@ -173,6 +178,7 @@ export const InspectionEvidence: React.FC = () => {
                     {(['excellent', 'good', 'fair', 'damaged'] as RoomCondition[]).map(cond => (
                       <button
                         key={cond}
+                        disabled={inspectionLocked}
                         onClick={() => handleConditionChange(item.id, cond)}
                         className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                           item.condition === cond
@@ -192,6 +198,7 @@ export const InspectionEvidence: React.FC = () => {
                 <input
                   type="text"
                   value={item.notes}
+                  disabled={inspectionLocked}
                   onChange={e => handleNotesChange(item.id, e.target.value)}
                   placeholder="Notes on scratches, cleanliness, or operational state..."
                   className="w-full text-xs p-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800"
@@ -374,6 +381,7 @@ export const InspectionEvidence: React.FC = () => {
               {/* Items Summary Table */}
               <div>
                 <h4 className="font-bold text-slate-900 mb-2">{lang === 'zh' ? '检查项目记录清单' : 'Room Checklist & Human Notes'}</h4>
+                <div className="overflow-x-auto">
                 <table className="w-full border border-slate-200 text-left">
                   <thead className="bg-slate-100 font-semibold text-slate-800">
                     <tr>
@@ -394,6 +402,7 @@ export const InspectionEvidence: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
 
               {/* Legal Disclaimer Box in PDF */}
@@ -405,13 +414,13 @@ export const InspectionEvidence: React.FC = () => {
               <div className="grid grid-cols-2 gap-4 border-t border-slate-200 pt-3">
                 <div className="p-3 bg-slate-50 rounded-lg">
                   <span className="text-[10px] text-slate-400 uppercase font-bold block">{t('landlordSignOff')}</span>
-                  <span className="font-semibold text-slate-900 block mt-1">David Miller</span>
-                  <span className="text-[10px] text-slate-500 font-mono">2025-10-31T15:20:00Z</span>
+                  <span className="font-semibold text-slate-900 block mt-1">{currentInspection.landlordSignatureName || (lang === 'zh' ? '未签署' : 'Not signed')}</span>
+                  <span className="text-[10px] text-slate-500 font-mono">{currentInspection.landlordSignedAt || ''}</span>
                 </div>
                 <div className="p-3 bg-slate-50 rounded-lg">
                   <span className="text-[10px] text-slate-400 uppercase font-bold block">{t('tenantSignOff')}</span>
-                  <span className="font-semibold text-slate-900 block mt-1">Emily Zhang</span>
-                  <span className="text-[10px] text-slate-500 font-mono">2025-10-31T16:05:00Z</span>
+                  <span className="font-semibold text-slate-900 block mt-1">{currentInspection.tenantSignatureName || (lang === 'zh' ? '未签署' : 'Not signed')}</span>
+                  <span className="text-[10px] text-slate-500 font-mono">{currentInspection.tenantSignedAt || ''}</span>
                 </div>
               </div>
             </div>

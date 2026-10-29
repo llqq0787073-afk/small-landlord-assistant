@@ -43,7 +43,7 @@ export const TenantRegister: React.FC = () => {
     }
   }, [matchedInvite]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -68,7 +68,7 @@ export const TenantRegister: React.FC = () => {
       return;
     }
 
-    if (password.length < 8) {
+    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
       setErrorMessage(t('passwordRequirement'));
       return;
     }
@@ -84,19 +84,16 @@ export const TenantRegister: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
-      const res = activateTenantInvitation(
-        invitationCode.trim(),
-        fullName.trim(),
-        email.trim(),
-        password
-      );
-      setIsSubmitting(false);
-
-      if (!res.success) {
-        setErrorMessage(res.error ? t(res.error) : 'Activation failed');
-      }
-    }, 600);
+    const res = await activateTenantInvitation(
+      invitationCode.trim(),
+      fullName.trim(),
+      email.trim(),
+      password
+    );
+    setIsSubmitting(false);
+    if (!res.success) {
+      setErrorMessage(res.error ? t(res.error) : 'Activation failed');
+    }
   };
 
   return (
