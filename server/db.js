@@ -260,7 +260,9 @@ async function checkCollisions() {
     const cnt = (await q(`SELECT COUNT(*)::int AS n FROM "${table}"`))[0].n;
     if (cnt === 0) {
       console.warn(`[server] WARNING: table "${table}" exists with an incompatible schema (missing columns: ${missing.join(', ')}). It is EMPTY, so it will be dropped and recreated with the app's schema.`);
-      await q(`DROP TABLE "${table}"`);
+      // CASCADE: the legacy schema has foreign keys between its tables
+      // (e.g. *.account_id -> landlord_accounts); drop those constraints too.
+      await q(`DROP TABLE "${table}" CASCADE`);
       await q(DDL[table]);
     } else {
       console.error(`[server] FATAL: table "${table}" already exists with an incompatible schema (missing columns: ${missing.join(', ')}) and contains ${cnt} row(s). Refusing to start rather than risk data loss.`);
