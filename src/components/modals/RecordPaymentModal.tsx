@@ -1,33 +1,71 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useI18n } from '../../lib/i18n';
 import { useAppStore } from '../../lib/store';
 import { RentPayment } from '../../types';
-import { Receipt, X, ShieldAlert } from 'lucide-react';
+import { Receipt, X, ShieldAlert, CircleAlert } from 'lucide-react';
 
 interface RecordPaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+const remainingOf = (c: { amount: number; paidAmount?: number }) =>
+  Math.max(0, c.amount - (c.paidAmount ?? 0));
+
 export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({ isOpen, onClose }) => {
   const { t, lang } = useI18n();
   const { rentCharges, units, tenancies, recordPayment } = useAppStore();
 
-  const [selectedChargeId, setSelectedChargeId] = useState<string>(rentCharges[1]?.id || rentCharges[0]?.id || '');
-  const [amount, setAmount] = useState<number>(650);
+  // Only charges that still have an outstanding balance can receive a payment.
+  // Fully-paid charges are excluded so the user can never pick a charge whose
+  // payment is guaranteed to be rejected by the server's overpayment guard.
+  const openCharges = rentCharges.filter(c => remainingOf(c) > 0);
+
+  const [selectedChargeId, setSelectedChargeId] = useState<string>('');
+  const [amount, setAmount] = useState<number>(0);
   const [method, setMethod] = useState<RentPayment['method']>('zelle');
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
+  const [formError, setFormError] = useState<string>('');
+
+  // The modal component stays mounted while isOpen toggles, and rentCharges
+  // loads asynchronously after login — so (re)sync the selection every time
+  // the modal opens instead of relying on a one-time useState initializer.
+  useEffect(() => {
+    if (isOpen) {
+      const first = openCharges[0];
+      setSelectedChargeId(first?.id || '');
+      setAmount(first ? remainingOf(first) : 0);
+      setFormError('');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const currentCharge = rentCharges.find(c => c.id === selectedChargeId);
+  const currentCharge = openCharges.find(c => c.id === selectedChargeId);
   const targetUnit = units.find(u => u.id === currentCharge?.unitId);
   const targetTenancy = tenancies.find(t => t.id === currentCharge?.tenancyId);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedChargeId || amount <= 0 || !currentCharge) return;
+    if (!currentCharge) {
+      setFormError(lang === 'zh' ? '没有可记账的未结清账单。' : 'There is no outstanding charge to record a payment against.');
+      return;
+    }
+    if (!amount || amount <= 0) {
+      setFormError(lang === 'zh' ? '请输入大于 0 的实收金额。' : 'Please enter a payment amount greater than 0.');
+      return;
+    }
+    const remaining = remainingOf(currentCharge);
+    if (amount > remaining) {
+      setFormError(
+        lang === 'zh'
+          ? `金额超过该账单剩余额度 $${remaining}，超额部分不会被静默吸收。`
+          : `Amount exceeds the remaining balance of $${remaining} on this charge.`
+      );
+      return;
+    }
 
     recordPayment({
       unitId: currentCharge.unitId,
@@ -69,6 +107,13 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({ isOpen, 
           <strong>{t('landlordReportedBadge')}:</strong> {lang === 'zh' ? '手工登记款项将依法标注为房东单方申报，保留审计留痕。' : 'Manually recorded payments are tagged as Landlord-Reported.'}
         </div>
 
+        {formError && (
+          <div className="flex items-start gap-2 p-2.5 bg-red-50 rounded-lg border border-red-200 text-red-800 text-xs leading-relaxed">
+            <CircleAlert className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>{formError}</span>
+          </div>
+        )}
+
         <div className="space-y-3 text-xs">
           <div>
             <label className="block font-semibold text-slate-700 mb-1">
@@ -78,18 +123,21 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({ isOpen, 
               value={selectedChargeId}
               onChange={e => {
                 setSelectedChargeId(e.target.value);
-                const chg = rentCharges.find(c => c.id === e.target.value);
-                if (chg) {
-                  const rem = Math.max(0, chg.amount - chg.paidAmount);
-                  setAmount(rem || chg.amount);
-                }
+                setFormError('');
+                const chg = openCharges.find(c => c.id === e.target.value);
+                if (chg) setAmount(remainingOf(chg));
               }}
               className="w-full p-2 border border-slate-300 rounded-lg bg-slate-50 font-medium text-xs"
             >
-              {rentCharges.map(chg => {
+              {openCharges.length === 0 && (
+                <option value="">
+                  {lang === 'zh' ? '所有账单已结清，无需记账' : 'All charges are settled — nothing to record'}
+                </option>
+              )}
+              {openCharges.map(chg => {
                 const u = units.find(unit => unit.id === chg.unitId);
                 const ten = tenancies.find(t => t.id === chg.tenancyId);
-                const bal = Math.max(0, chg.amount - chg.paidAmount);
+                const bal = remainingOf(chg);
                 return (
                   <option key={chg.id} value={chg.id}>
                     {u?.unitNumber} · {ten?.tenantName} — Bal: ${bal} (Due: ${chg.amount})
@@ -97,6 +145,11 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({ isOpen, 
                 );
               })}
             </select>
+            <p className="mt-1 text-[11px] text-slate-500">
+              {lang === 'zh'
+                ? '仅显示有剩余额度的账单；已结清账单不会出现在这里。'
+                : 'Only charges with an outstanding balance are listed; settled charges are hidden.'}
+            </p>
           </div>
 
           <div>
@@ -170,10 +223,18 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({ isOpen, 
           </button>
           <button
             type="submit"
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm"
+            disabled={!currentCharge}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-xl text-xs font-semibold shadow-sm"
           >
             {lang === 'zh' ? '入账并打印收据' : 'Record & Generate Receipt'}
           </button>
+        </div>
+
+        <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+          <ShieldAlert className="w-3.5 h-3.5" />
+          {lang === 'zh'
+            ? '超额金额会被服务端拒绝，不会静默吞掉。'
+            : 'Overpayments are rejected by the server, never silently absorbed.'}
         </div>
       </form>
     </div>
