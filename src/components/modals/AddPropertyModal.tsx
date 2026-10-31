@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useI18n } from '../../lib/i18n';
 import { useAppStore } from '../../lib/store';
 import { US_STATES_LIST } from '../../lib/statesData';
@@ -29,11 +29,38 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({ isOpen, onCl
   const [bath, setBath] = useState(2);
   const [sqft, setSqft] = useState(1200);
 
+  // Per-unit overrides. Each row starts as a copy of the template above;
+  // editing a row only changes that unit.
+  interface UnitRow { bed: number; bath: number; sqft: number; rent: number; deposit: number }
+  const blankRow = (): UnitRow => ({ bed, bath, sqft, rent, deposit });
+  const [unitRows, setUnitRows] = useState<UnitRow[]>([blankRow()]);
+
+  useEffect(() => {
+    setUnitRows(prev => {
+      const next = [...prev];
+      while (next.length < unitsCount) next.push({ bed, bath, sqft, rent, deposit });
+      return next.slice(0, Math.max(1, unitsCount));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unitsCount]);
+
   if (!isOpen) return null;
+
+  const setRow = (i: number, patch: Partial<UnitRow>) =>
+    setUnitRows(prev => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !address || !city) return;
+
+    const units = unitRows.slice(0, Math.max(1, unitsCount)).map((r, i) => ({
+      unitNumber: unitsCount === 1 ? 'Main' : `Unit ${i + 1}`,
+      bedrooms: r.bed,
+      bathrooms: r.bath,
+      sqft: r.sqft,
+      monthlyRent: r.rent,
+      securityDeposit: r.deposit,
+    }));
 
     addProperty(
       {
@@ -48,7 +75,7 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({ isOpen, onCl
         yearBuilt,
         notes: `Residential rental property in ${city}, ${state}.`
       },
-      { rent, deposit, bed, bath, sqft }
+      units
     );
 
     onClose();
@@ -276,6 +303,37 @@ export const AddPropertyModal: React.FC<AddPropertyModalProps> = ({ isOpen, onCl
               />
             </div>
           </div>
+          <p className="text-[11px] text-slate-500">
+            {lang === 'zh' ? '以上为默认值；多单元时可在下方按单元单独调整。' : 'Defaults above; adjust per unit below when there are multiple units.'}
+          </p>
+
+          {unitsCount > 1 && (
+            <div className="pt-1">
+              <label className="block font-semibold text-slate-700 mb-1">
+                {t('perUnitDetails')}
+              </label>
+              <div className="border border-slate-200 rounded-xl overflow-hidden">
+                <div className="grid grid-cols-[3.2rem_1fr_1fr_1fr_1fr_1fr] gap-1 px-2 py-1.5 bg-slate-50 text-[10px] font-semibold text-slate-500">
+                  <span>{t('unit')}</span><span>{t('bedrooms')}</span><span>{t('bathrooms')}</span><span>{t('sqft')}</span><span>{t('monthlyRent')}($)</span><span>{t('securityDeposit')}($)</span>
+                </div>
+                {unitRows.slice(0, unitsCount).map((r, i) => (
+                  <div key={i} className="grid grid-cols-[3.2rem_1fr_1fr_1fr_1fr_1fr] gap-1 px-2 py-1.5 border-t border-slate-100 items-center">
+                    <span className="text-[11px] font-bold text-slate-700">{unitsCount === 1 ? 'Main' : `Unit ${i + 1}`}</span>
+                    <input type="number" min={0} value={r.bed} onChange={e => setRow(i, { bed: Number(e.target.value) })}
+                      className="w-full p-1.5 border border-slate-200 rounded-lg text-xs tabular-nums" />
+                    <input type="number" min={0} step="0.5" value={r.bath} onChange={e => setRow(i, { bath: Number(e.target.value) })}
+                      className="w-full p-1.5 border border-slate-200 rounded-lg text-xs tabular-nums" />
+                    <input type="number" min={0} value={r.sqft} onChange={e => setRow(i, { sqft: Number(e.target.value) })}
+                      className="w-full p-1.5 border border-slate-200 rounded-lg text-xs tabular-nums" />
+                    <input type="number" min={0} value={r.rent} onChange={e => setRow(i, { rent: Number(e.target.value) })}
+                      className="w-full p-1.5 border border-slate-200 rounded-lg text-xs font-mono tabular-nums" />
+                    <input type="number" min={0} value={r.deposit} onChange={e => setRow(i, { deposit: Number(e.target.value) })}
+                      className="w-full p-1.5 border border-slate-200 rounded-lg text-xs font-mono tabular-nums" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">

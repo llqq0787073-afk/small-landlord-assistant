@@ -354,6 +354,12 @@ const translations: Record<Language, Record<string, string>> = {
     scheduleInspectionTitle: 'Schedule Inspection',
     scheduleInspectionBtn: 'Schedule Inspection',
 
+    // Unit management
+    perUnitDetails: 'Per-Unit Details',
+    editUnitTitle: 'Edit Unit',
+    unitNumberLabel: 'Unit Number',
+    unitStatusLabel: 'Status',
+
     // Common Actions
     save: 'Save',
     cancel: 'Cancel',
@@ -725,6 +731,12 @@ const translations: Record<Language, Record<string, string>> = {
     inspectionDate: '计划日期',
     scheduleInspectionTitle: '发起检查',
     scheduleInspectionBtn: '发起检查',
+
+    // Unit management
+    perUnitDetails: '按单元填写明细',
+    editUnitTitle: '编辑单元',
+    unitNumberLabel: '单元编号',
+    unitStatusLabel: '状态',
 
     // Common Actions
     save: '保存',

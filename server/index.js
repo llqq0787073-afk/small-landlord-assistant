@@ -256,17 +256,58 @@ app.patch('/api/users/:id/suspension', auth, requireRole('admin'), async (req, r
 
 // ---------- Properties ----------
 app.post('/api/properties', auth, requireRole('landlord', 'admin'), async (req, res) => {
-  const { property, unitDetails } = req.body || {};
+  const { property, unitDetails, units: unitSpecs } = req.body || {};
   if (!property?.name || !property?.address || !property?.city) return res.status(400).json({ error: 'invalidInput' });
   const unitsCount = Math.min(10, Math.max(1, Number(property.unitsCount) || 1));
   const id = uid('prop');
   const prop = { ...property, id, landlordId: req.user.id, unitsCount, createdAt: new Date().toISOString().slice(0, 10) };
   await store.upsert('properties', prop);
+  const num = (v, fallback) => Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : fallback;
+  const d = unitDetails || {};
   for (let i = 1; i <= unitsCount; i++) {
-    await store.upsert('units', { id: `${id}_${i}`, propertyId: id, unitNumber: unitsCount === 1 ? 'Main' : `Unit ${i}`, bedrooms: unitDetails?.bed || 0, bathrooms: unitDetails?.bath || 0, sqft: unitDetails?.sqft || 0, monthlyRent: unitDetails?.rent || 0, securityDeposit: unitDetails?.deposit || 0, status: 'vacant', appliances: ['Refrigerator', 'Range Oven', 'Smoke Detector'] });
+    const s = Array.isArray(unitSpecs) && unitSpecs.length > 0 ? unitSpecs[Math.min(i - 1, unitSpecs.length - 1)] : null;
+    await store.upsert('units', {
+      id: `${id}_${i}`,
+      propertyId: id,
+      unitNumber: (s?.unitNumber && String(s.unitNumber).trim()) || (unitsCount === 1 ? 'Main' : `Unit ${i}`),
+      bedrooms: num(s?.bedrooms ?? s?.bed, num(d.bed, 0)),
+      bathrooms: num(s?.bathrooms ?? s?.bath, num(d.bath, 0)),
+      sqft: num(s?.sqft, num(d.sqft, 0)),
+      monthlyRent: num(s?.monthlyRent ?? s?.rent, num(d.rent, 0)),
+      securityDeposit: num(s?.securityDeposit ?? s?.deposit, num(d.deposit, 0)),
+      status: 'vacant',
+      appliances: ['Refrigerator', 'Range Oven', 'Smoke Detector'],
+    });
   }
   await addAuditLog({ actorName: req.user.name, actorRole: req.activeRole, action: 'CREATE_PROPERTY', entityType: 'Property', entityId: id, details: `Added property: ${prop.name} (${prop.state}) with ${unitsCount} unit(s)` });
   res.json({ success: true, property: prop });
+});
+app.patch('/api/units/:id', auth, requireRole('landlord', 'admin'), async (req, res) => {
+  const unit = await store.get('units', req.params.id);
+  if (!unit) return res.status(404).json({ error: 'notFound' });
+  const prop = await store.get('properties', unit.propertyId);
+  if (req.activeRole === 'landlord') {
+    const owns = prop && (prop.landlordId ? prop.landlordId === req.user.id : req.user.id === 'usr_landlord_1');
+    if (!owns) return res.status(403).json({ error: 'notYourProperty' });
+  }
+  const { unitNumber, bedrooms, bathrooms, sqft, monthlyRent, securityDeposit, status } = req.body || {};
+  const num = (v, fallback) => v === undefined || v === '' ? fallback : (Number.isFinite(Number(v)) && Number(v) >= 0 ? Number(v) : null);
+  const next = {
+    ...unit,
+    unitNumber: (typeof unitNumber === 'string' && unitNumber.trim()) || unit.unitNumber,
+    bedrooms: num(bedrooms, unit.bedrooms),
+    bathrooms: num(bathrooms, unit.bathrooms),
+    sqft: num(sqft, unit.sqft),
+    monthlyRent: num(monthlyRent, unit.monthlyRent),
+    securityDeposit: num(securityDeposit, unit.securityDeposit),
+  };
+  if (Object.values(next).some((v) => v === null)) return res.status(400).json({ error: 'invalidInput' });
+  // Occupancy is managed by leases: never flip it by hand while a lease is active.
+  const hasActiveLease = (await store.all('tenancies')).some((t) => t.unitId === unit.id && t.status === 'active');
+  if (!hasActiveLease && (status === 'vacant' || status === 'maintenance')) next.status = status;
+  await store.upsert('units', next);
+  await addAuditLog({ actorName: req.user.name, actorRole: req.activeRole, action: 'UPDATE_UNIT', entityType: 'Unit', entityId: unit.id, details: `Updated ${next.unitNumber}: rent $${next.monthlyRent}, ${next.bedrooms}bd/${next.bathrooms}ba, ${next.sqft}sqft` });
+  res.json({ success: true, unit: next });
 });
 
 // ---------- Ledger ----------

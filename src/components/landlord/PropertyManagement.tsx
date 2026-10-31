@@ -4,6 +4,7 @@ import { useAppStore } from '../../lib/store';
 import { Property, Unit, UnitStatus } from '../../types';
 import { TenantInvitationManager } from './TenantInvitationManager';
 import { NewLeaseModal } from '../modals/NewLeaseModal';
+import { EditUnitModal } from '../modals/EditUnitModal';
 import {
   Building2,
   Plus,
@@ -18,7 +19,8 @@ import {
   Clock,
   Sparkles,
   FileText,
-  Ticket
+  Ticket,
+  Pencil
 } from 'lucide-react';
 
 interface PropertyManagementProps {
@@ -35,6 +37,7 @@ export const PropertyManagement: React.FC<PropertyManagementProps> = ({
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [leaseUnitId, setLeaseUnitId] = useState<string | null>(null);
+  const [editUnitId, setEditUnitId] = useState<string | null>(null);
 
   const filteredProperties = selectedPropertyId === 'all'
     ? properties
@@ -282,6 +285,13 @@ export const PropertyManagement: React.FC<PropertyManagementProps> = ({
                     <div className="text-base font-bold text-slate-900 tabular-nums">
                       ${unit.monthlyRent.toLocaleString()}
                       <span className="text-xs font-normal text-slate-500">{t('monthly')}</span>
+                      <button
+                        onClick={() => setEditUnitId(unit.id)}
+                        title={t('editUnitTitle')}
+                        className="ml-1.5 p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors align-middle"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                     <div className="text-xs text-slate-500 tabular-nums">
                       {lang === 'zh' ? '押金 ' : 'Deposit: '}${unit.securityDeposit.toLocaleString()}
@@ -325,6 +335,14 @@ export const PropertyManagement: React.FC<PropertyManagementProps> = ({
           isOpen={!!leaseUnitId}
           onClose={() => setLeaseUnitId(null)}
           unitId={leaseUnitId}
+        />
+      )}
+
+      {editUnitId && (
+        <EditUnitModal
+          isOpen={!!editUnitId}
+          onClose={() => setEditUnitId(null)}
+          unitId={editUnitId}
         />
       )}
     </div>

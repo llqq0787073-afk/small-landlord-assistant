@@ -80,7 +80,8 @@ interface AppContextType extends AppState {
   toggleUserSuspension: (userId: string) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
   quickDemoLogin: (target: 'landlord' | 'tenant' | 'admin' | 'multi' | 'suspended') => Promise<void>;
-  addProperty: (property: Omit<Property, 'id' | 'createdAt'>, unitDetails: { rent: number; deposit: number; bed: number; bath: number; sqft: number }) => Promise<void>;
+  addProperty: (property: Omit<Property, 'id' | 'createdAt'>, units: Array<{ unitNumber?: string; bedrooms: number; bathrooms: number; sqft: number; monthlyRent: number; securityDeposit: number }>) => Promise<void>;
+  updateUnit: (unitId: string, updates: { unitNumber?: string; bedrooms?: number; bathrooms?: number; sqft?: number; monthlyRent?: number; securityDeposit?: number; status?: string }) => Promise<boolean>;
   createTenancy: (lease: { propertyId: string; unitId: string; tenantName: string; tenantEmail?: string; tenantPhone?: string; startDate: string; endDate: string; rentAmount: number; dueDay?: number; securityDeposit?: number }) => Promise<boolean>;
   scheduleInspection: (job: { propertyId: string; unitId: string; tenancyId?: string; type: 'move_in' | 'move_out' | 'routine'; scheduledDate: string }) => Promise<boolean>;
   recordPayment: (payment: { unitId: string; tenancyId: string; chargeId: string; amount: number; method: RentPayment['method']; reference?: string; notes?: string }) => Promise<void>;
@@ -1274,12 +1275,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!res.success) setToastMessage({ text: res.error || 'Login failed', type: 'warning' });
   };
 
-  const addProperty = async (propData: Omit<Property, 'id' | 'createdAt'>, unitDetails: { rent: number; deposit: number; bed: number; bath: number; sqft: number }) => {
+  const addProperty = async (propData: Omit<Property, 'id' | 'createdAt'>, units: Array<{ unitNumber?: string; bedrooms: number; bathrooms: number; sqft: number; monthlyRent: number; securityDeposit: number }>) => {
     try {
-      await api('/properties', { method: 'POST', body: JSON.stringify({ property: propData, unitDetails }) });
+      await api('/properties', { method: 'POST', body: JSON.stringify({ property: propData, units }) });
       await refresh();
       setToastMessage({ text: `Property "${propData.name}" added successfully.`, type: 'success' });
     } catch (e) { failToast(e, 'Failed to add property'); }
+  };
+
+  const updateUnit = async (unitId: string, updates: { unitNumber?: string; bedrooms?: number; bathrooms?: number; sqft?: number; monthlyRent?: number; securityDeposit?: number; status?: string }) => {
+    try {
+      await api(`/units/${unitId}`, { method: 'PATCH', body: JSON.stringify(updates) });
+      await refresh();
+      setToastMessage({ text: 'Unit updated. New rent applies to future leases; existing bills are unchanged.', type: 'success' });
+      return true;
+    } catch (e) { failToast(e, 'Failed to update unit'); return false; }
   };
 
   const createTenancy = async (lease: { propertyId: string; unitId: string; tenantName: string; tenantEmail?: string; tenantPhone?: string; startDate: string; endDate: string; rentAmount: number; dueDay?: number; securityDeposit?: number }) => {
@@ -1384,7 +1394,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         switchActiveRole, updateUserProfile, toggleUserSuspension, changePassword, quickDemoLogin,
         properties, units, tenancies, rentCharges, payments, adjustments, maintenanceTickets,
         tasks, inspections, conversations, messages, legalResources, documents, auditLogs,
-        subscriptionPlans, activePlanId, toastMessage, setCurrentRole, addProperty, createTenancy, scheduleInspection, recordPayment,
+        subscriptionPlans, activePlanId, toastMessage, setCurrentRole, addProperty, updateUnit, createTenancy, scheduleInspection, recordPayment,
         addLedgerAdjustment, addMaintenanceTicket, updateTicketStatus, addTask, toggleTaskStatus,
         updateInspectionItem, signInspection, sendMessage, toggleBookmarkResource,
         simulateLiveRentEvent, simulateLiveMaintenanceEvent, clearToast,
