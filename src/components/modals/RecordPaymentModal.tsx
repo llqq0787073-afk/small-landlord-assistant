@@ -19,7 +19,9 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({ isOpen, 
   // Only charges that still have an outstanding balance can receive a payment.
   // Fully-paid charges are excluded so the user can never pick a charge whose
   // payment is guaranteed to be rejected by the server's overpayment guard.
-  const openCharges = rentCharges.filter(c => remainingOf(c) > 0);
+  const openCharges = rentCharges
+    .filter(c => remainingOf(c) > 0)
+    .sort((a, b) => (a.billingMonth || '').localeCompare(b.billingMonth || '') || (a.dueDate || '').localeCompare(b.dueDate || ''));
 
   const [selectedChargeId, setSelectedChargeId] = useState<string>('');
   const [amount, setAmount] = useState<number>(0);
@@ -140,7 +142,7 @@ export const RecordPaymentModal: React.FC<RecordPaymentModalProps> = ({ isOpen, 
                 const bal = remainingOf(chg);
                 return (
                   <option key={chg.id} value={chg.id}>
-                    {u?.unitNumber} · {ten?.tenantName} — Bal: ${bal} (Due: ${chg.amount})
+                    [{chg.billingMonth}] {u?.unitNumber} · {ten?.tenantName} — Bal: ${bal} (Due: ${chg.amount})
                   </option>
                 );
               })}

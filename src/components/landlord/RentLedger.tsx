@@ -31,7 +31,13 @@ export const RentLedger: React.FC<RentLedgerProps> = ({ openRecordPaymentModal }
   } = useAppStore();
 
   const availableMonths = Array.from(new Set(rentCharges.map(c => c.billingMonth))).sort().reverse();
-  const [selectedMonth, setSelectedMonth] = useState(availableMonths[0] || new Date().toISOString().slice(0, 7));
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  // Default to the current month when it has charges; otherwise the earliest
+  // month (not the furthest future one) so users land on actionable bills.
+  const defaultMonth = availableMonths.includes(thisMonth)
+    ? thisMonth
+    : ([...availableMonths].sort()[0] || thisMonth);
+  const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
   const [selectedReceipt, setSelectedReceipt] = useState<RentPayment | null>(null);
   const [adjustmentModalOpen, setAdjustmentModalOpen] = useState(false);
   const [adjustChargeId, setAdjustChargeId] = useState('');
