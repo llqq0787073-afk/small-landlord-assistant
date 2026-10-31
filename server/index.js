@@ -2,10 +2,10 @@
 // Express + PostgreSQL (pg) + bcryptjs + JWT.
 // Secrets come only from environment variables; see .env.example.
 // The database connection comes ONLY from DATABASE_URL (see server/db.js).
-// Email sending is NOT implemented: verification / reset tokens are printed
-// to the backend terminal in non-production mode only, so a local tester can
-// complete the flow. They are NEVER returned in an API response and NEVER
-// rendered on any page. In production this must be replaced by an email sender.
+// Email sending: production uses Resend (RESEND_API_KEY + EMAIL_FROM). In
+// non-production without those vars, verification / reset tokens are printed
+// to the backend terminal so a local tester can complete the flow. They are
+// NEVER returned in an API response and NEVER rendered on any page.
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -24,6 +24,13 @@ if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
 if (!process.env.JWT_SECRET) console.warn('[server] WARNING: JWT_SECRET is not set; using a dev-only fallback. Never use this in production.');
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 
+// Production email is mandatory: without it, new users can never verify
+// their accounts or reset passwords. Fail fast rather than run broken.
+if (process.env.NODE_ENV === 'production' && (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM)) {
+  console.error('[server] FATAL: RESEND_API_KEY and EMAIL_FROM must be set in production (verification/reset emails). Refusing to start.');
+  process.exit(1);
+}
+
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 app.use((req, res, next) => {
@@ -39,6 +46,31 @@ const hashToken = (t) => createHash('sha256').update(t).digest('hex');
 const isEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e || '');
 const strongPassword = (p) => typeof p === 'string' && p.length >= 8 && /[A-Za-z]/.test(p) && /\d/.test(p);
 const signToken = (user, role) => jwt.sign({ sub: user.id, email: user.email, role }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+
+// ---------- Email (Resend) ----------
+// Production: set RESEND_API_KEY and EMAIL_FROM (e.g. noreply@landlordassistant.us).
+// Returns true if the email was accepted, false if email is not configured
+// (local dev) or the send failed.
+async function sendEmail(to, subject, text) {
+  const key = process.env.RESEND_API_KEY;
+  const from = process.env.EMAIL_FROM;
+  if (!key || !from) return false;
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to: [to], subject, text }),
+    });
+    if (!r.ok) {
+      console.error('[server] email send failed:', r.status, (await r.text().catch(() => '')).slice(0, 200));
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error('[server] email send error:', e && e.message);
+    return false;
+  }
+}
 
 async function auth(req, res, next) {
   const h = req.headers.authorization || '';
@@ -81,7 +113,11 @@ app.post('/api/auth/register', async (req, res) => {
   const token = randomBytes(32).toString('hex');
   const exp = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
   await q('INSERT INTO email_verifications (id,email,token_hash,expires_at,created_at) VALUES ($1,$2,$3,$4,$5)', [uid('ev'), clean, hashToken(token), exp, new Date().toISOString()]);
-  if (process.env.NODE_ENV !== 'production') console.log(`[dev-only] email verification token for ${clean}: ${token} (expires ${exp}; enter it on the verify-email page)`);
+  const emailed = await sendEmail(clean,
+    'Verify your email — 小房东助手 Small Landlord Assistant',
+    `Hi ${name.trim()},\n\nYour verification code is:\n\n    ${token}\n\nIt expires in 24 hours. Enter it on the verify-email page in the app.\n\n验证码：${token}（24 小时内有效），请在 App 的邮箱验证页输入。\n\n— Small Landlord Assistant 小房东助手`);
+  if (!emailed && process.env.NODE_ENV !== 'production') console.log(`[dev-only] email verification token for ${clean}: ${token} (expires ${exp}; enter it on the verify-email page)`);
+  if (!emailed) console.error(`[server] WARNING: verification email NOT sent to ${clean} (email not configured or send failed).`);
   await addAuthEvent({ userId: id, actorEmail: clean, actorRole: 'landlord', eventType: 'SIGNUP_LANDLORD', ipAddress: req.ip || '', userAgent: '', details: `New landlord account registered: ${name.trim()}` });
   res.json({ success: true, user: publicUser(user), pendingVerificationEmail: clean });
 });
@@ -93,7 +129,11 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     const token = randomBytes(32).toString('hex');
     const exp = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
     await q('INSERT INTO email_verifications (id,email,token_hash,expires_at,created_at) VALUES ($1,$2,$3,$4,$5)', [uid('ev'), clean, hashToken(token), exp, new Date().toISOString()]);
-    if (process.env.NODE_ENV !== 'production') console.log(`[dev-only] email verification token for ${clean}: ${token} (expires ${exp})`);
+    const emailed = await sendEmail(clean,
+      'Verify your email — 小房东助手 Small Landlord Assistant',
+      `Hi,\n\nYour verification code is:\n\n    ${token}\n\nIt expires in 24 hours. Enter it on the verify-email page in the app.\n\n验证码：${token}（24 小时内有效），请在 App 的邮箱验证页输入。\n\n— Small Landlord Assistant 小房东助手`);
+    if (!emailed && process.env.NODE_ENV !== 'production') console.log(`[dev-only] email verification token for ${clean}: ${token} (expires ${exp})`);
+    if (!emailed) console.error(`[server] WARNING: verification email NOT sent to ${clean} (email not configured or send failed).`);
   }
   res.json({ success: true });
 });
@@ -158,7 +198,11 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     const token = randomBytes(32).toString('hex');
     const exp = new Date(Date.now() + 2 * 3600 * 1000).toISOString();
     await q('INSERT INTO password_resets (id,email,token_hash,expires_at,created_at) VALUES ($1,$2,$3,$4,$5)', [uid('rst'), clean, hashToken(token), exp, new Date().toISOString()]);
-    if (process.env.NODE_ENV !== 'production') console.log(`[dev-only] password reset token for ${clean}: ${token} (expires ${exp}; enter it on the reset-password page)`);
+    const emailed = await sendEmail(clean,
+      'Reset your password — 小房东助手 Small Landlord Assistant',
+      `You requested a password reset. Your reset code is:\n\n    ${token}\n\nIt expires in 2 hours. Enter it on the reset-password page in the app. If you did not request this, you can safely ignore this email.\n\n重置验证码：${token}（2 小时内有效），请在 App 的重置密码页输入。如非本人操作请忽略。\n\n— Small Landlord Assistant 小房东助手`);
+    if (!emailed && process.env.NODE_ENV !== 'production') console.log(`[dev-only] password reset token for ${clean}: ${token} (expires ${exp}; enter it on the reset-password page)`);
+    if (!emailed) console.error(`[server] WARNING: password-reset email NOT sent to ${clean} (email not configured or send failed).`);
     await addAuthEvent({ userId: user.id, actorEmail: clean, actorRole: user.role, eventType: 'PASSWORD_RESET_REQUESTED', ipAddress: req.ip || '', userAgent: '', details: 'Password reset requested (token hashed, single-use, 2h expiry)' });
   }
   res.json({ success: true });

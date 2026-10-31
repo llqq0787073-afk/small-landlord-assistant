@@ -1,6 +1,10 @@
-// Minimal API client for the local Express backend (proxied as /api by Vite).
+// Minimal API client for the Express backend.
+// Local dev: Vite proxies /api to the backend (see vite.config.ts), so the
+// base is empty. Production builds point at the public API instead:
+// build with VITE_API_URL=https://sla-api-indr.onrender.com
 // The JWT is stored in localStorage under sla_token. Clearing it is logout.
 const TOKEN_KEY = 'sla_token';
+const API_BASE = import.meta.env.VITE_API_URL || '';
 export function getToken() { return localStorage.getItem(TOKEN_KEY); }
 export function setToken(t: string | null) {
   if (t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY);
@@ -16,7 +20,7 @@ export async function api(path: string, opts: RequestInit = {}) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(opts.headers as any) };
   const token = getToken();
   if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(`/api${path}`, { ...opts, headers });
+  const res = await fetch(`${API_BASE}/api${path}`, { ...opts, headers });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(res.status, body);
   return body;

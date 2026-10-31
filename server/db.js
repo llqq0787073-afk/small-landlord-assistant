@@ -273,6 +273,13 @@ async function checkCollisions() {
 }
 
 async function seedIfEmpty() {
+  // Demo seeding is a local-dev convenience. It must NEVER run in production:
+  // Render sets NODE_ENV=production, which disables it unless explicitly
+  // overridden with SEED_DEMO=true. Local dev (NODE_ENV unset) is unaffected.
+  if (process.env.NODE_ENV === 'production' && process.env.SEED_DEMO !== 'true') {
+    console.log('[server] Demo seeding disabled (NODE_ENV=production).');
+    return;
+  }
   const count = (await q('SELECT COUNT(*)::int AS n FROM users'))[0].n;
   if (count > 0) return;
   const seedPath = join(__dirname, 'seed.json');
