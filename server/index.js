@@ -392,6 +392,107 @@ app.post('/api/invitations', auth, requireRole('landlord', 'admin'), async (req,
   res.json({ success: true, invitation: inv });
 });
 
+// ---------- Tenancies (leases) ----------
+const isValidDateStr = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(new Date(s + 'T00:00:00Z').getTime());
+
+app.post('/api/tenancies', auth, requireRole('landlord', 'admin'), async (req, res) => {
+  const { propertyId, unitId, tenantName, tenantEmail, tenantPhone, startDate, endDate, rentAmount, dueDay, securityDeposit } = req.body || {};
+  const prop = await store.get('properties', propertyId);
+  const unit = await store.get('units', unitId);
+  if (!prop || !unit || unit.propertyId !== propertyId) return res.status(400).json({ error: 'invalidInput' });
+  if (req.activeRole === 'landlord') {
+    const owns = prop.landlordId ? prop.landlordId === req.user.id : req.user.id === 'usr_landlord_1';
+    if (!owns) return res.status(403).json({ error: 'notYourProperty' });
+  }
+  if (!tenantName || !tenantName.trim()) return res.status(400).json({ error: 'invalidInput' });
+  if (tenantEmail && !isEmail(tenantEmail)) return res.status(400).json({ error: 'invalidInput' });
+  if (!isValidDateStr(startDate) || !isValidDateStr(endDate) || startDate >= endDate) return res.status(400).json({ error: 'invalidDateRange' });
+  const rent = Number(rentAmount);
+  if (!Number.isFinite(rent) || rent <= 0) return res.status(400).json({ error: 'invalidInput' });
+  const due = Math.min(28, Math.max(1, parseInt(dueDay, 10) || 1));
+  // A unit cannot have two overlapping active leases.
+  const clash = (await store.all('tenancies')).some((t) => t.unitId === unitId && t.status === 'active' && !(t.endDate < startDate || t.startDate > endDate));
+  if (clash) return res.status(409).json({ error: 'tenancyOverlap' });
+
+  const tenancyId = uid('ten');
+  const tenancy = {
+    id: tenancyId, unitId, propertyId,
+    tenantName: tenantName.trim(),
+    tenantEmail: (tenantEmail || '').trim().toLowerCase(),
+    tenantPhone: (tenantPhone || '').trim(),
+    startDate, endDate, rentAmount: rent, dueDay: due,
+    securityDeposit: securityDeposit !== undefined && securityDeposit !== '' ? Number(securityDeposit) : rent,
+    depositHeldStatus: 'held', status: 'active', version: 1,
+  };
+  await store.upsert('tenancies', tenancy);
+
+  // Generate one rent charge per rent-due day falling inside the lease term.
+  // A 12-month lease therefore yields 12 full-month bills; a partial first
+  // or last month is simply not auto-billed (use a ledger adjustment for it).
+  const charges = [];
+  let [y, m] = startDate.split('-').map(Number);
+  const startDay = Number(startDate.split('-')[2]);
+  if (startDay > due) { m += 1; if (m > 12) { m = 1; y += 1; } }
+  const [ey, em] = endDate.split('-').map(Number);
+  while (y < ey || (y === ey && m <= em)) {
+    const billingMonth = `${y}-${String(m).padStart(2, '0')}`;
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const dueDate = `${billingMonth}-${String(Math.min(due, daysInMonth)).padStart(2, '0')}`;
+    if (dueDate > endDate) break;
+    const charge = {
+      id: uid('chg'), tenancyId, unitId, propertyId,
+      billingMonth, dueDate, amount: rent, paidAmount: 0,
+      status: computeChargeStatus({ amount: rent, paidAmount: 0, dueDate }),
+      type: 'rent',
+    };
+    await store.upsert('rent_charges', charge);
+    charges.push(charge);
+    m += 1; if (m > 12) { m = 1; y += 1; }
+  }
+
+  await store.upsert('units', { ...unit, status: 'occupied' });
+  await addAuditLog({ actorName: req.user.name, actorRole: req.activeRole, action: 'CREATE_TENANCY', entityType: 'Tenancy', entityId: tenancyId, details: `Lease for ${tenancy.tenantName} @ ${unit.unitNumber}: ${startDate} → ${endDate}, $${rent}/mo, ${charges.length} rent charges generated` });
+  res.json({ success: true, tenancy, chargesGenerated: charges.length });
+});
+
+// ---------- Inspections ----------
+const DEFAULT_INSPECTION_TEMPLATE = [
+  { roomName: 'Living Room / 客厅', itemKey: 'Walls, Flooring & Windows' },
+  { roomName: 'Kitchen / 厨房', itemKey: 'Appliances, Counters & Sink' },
+  { roomName: 'Bedroom / 卧室', itemKey: 'Walls, Flooring & Closet' },
+  { roomName: 'Bathroom / 卫生间', itemKey: 'Fixtures, Tile & Ventilation' },
+  { roomName: 'General / 通用', itemKey: 'Smoke/CO Detectors & Locks' },
+  { roomName: 'Exterior / 外部', itemKey: 'Entry, Balcony & Common Areas' },
+];
+
+app.post('/api/inspections', auth, requireRole('landlord', 'admin'), async (req, res) => {
+  const { propertyId, unitId, tenancyId, type, scheduledDate } = req.body || {};
+  const prop = await store.get('properties', propertyId);
+  const unit = await store.get('units', unitId);
+  if (!prop || !unit || unit.propertyId !== propertyId) return res.status(400).json({ error: 'invalidInput' });
+  if (req.activeRole === 'landlord') {
+    const owns = prop.landlordId ? prop.landlordId === req.user.id : req.user.id === 'usr_landlord_1';
+    if (!owns) return res.status(403).json({ error: 'notYourProperty' });
+  }
+  if (!['move_in', 'move_out', 'routine'].includes(type)) return res.status(400).json({ error: 'invalidInput' });
+  const ten = tenancyId ? await store.get('tenancies', tenancyId) : null;
+  if (tenancyId && !ten) return res.status(400).json({ error: 'invalidInput' });
+  const id = uid('insp');
+  const inspection = {
+    id, unitId, propertyId, tenancyId: ten ? ten.id : '',
+    type, status: 'in_progress',
+    scheduledDate: isValidDateStr(scheduledDate) ? scheduledDate : new Date().toISOString().slice(0, 10),
+    items: DEFAULT_INSPECTION_TEMPLATE.map((tpl, i) => ({
+      id: `item_${id}_${i}`, roomName: tpl.roomName, itemKey: tpl.itemKey,
+      condition: 'fair', notes: '', wearTearCategory: 'undetermined', evidenceFiles: [],
+    })),
+    landlordSigned: false, tenantSigned: false, version: 1,
+  };
+  await store.upsert('inspections', inspection);
+  await addAuditLog({ actorName: req.user.name, actorRole: req.activeRole, action: 'SCHEDULE_INSPECTION', entityType: 'Inspection', entityId: id, details: `${type} inspection scheduled for ${unit.unitNumber} (${inspection.scheduledDate})` });
+  res.json({ success: true, inspection });
+});
+
 // Simulated live events are kept only as explicit landlord actions that
 // create real records (no fake payments beyond a remaining balance).
 app.post('/api/simulate/rent', auth, requireRole('landlord', 'admin'), async (req, res) => {

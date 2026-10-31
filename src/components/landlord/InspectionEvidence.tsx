@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useI18n } from '../../lib/i18n';
 import { useAppStore } from '../../lib/store';
 import { Inspection, InspectionItem, RoomCondition } from '../../types';
+import { ScheduleInspectionModal } from '../modals/ScheduleInspectionModal';
 import {
   FileCheck,
   ShieldCheck,
@@ -24,6 +25,7 @@ export const InspectionEvidence: React.FC = () => {
   const [compareMode, setCompareMode] = useState<boolean>(false);
   const [pdfModalOpen, setPdfModalOpen] = useState<boolean>(false);
   const [signatureName, setSignatureName] = useState<string>(currentUser.name);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
 
   const currentInspection = inspections.find(i => i.id === selectedInspectionId) || inspections[0];
   const inspectionLocked = !!(currentInspection?.landlordSigned && currentInspection?.tenantSigned);
@@ -63,6 +65,12 @@ export const InspectionEvidence: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setScheduleOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all shadow-sm"
+          >
+            <span>{t('scheduleInspectionTitle')}</span>
+          </button>
           <button
             onClick={() => setCompareMode(!compareMode)}
             className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-all ${
@@ -442,6 +450,12 @@ export const InspectionEvidence: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+      {scheduleOpen && (
+        <ScheduleInspectionModal
+          isOpen={scheduleOpen}
+          onClose={() => setScheduleOpen(false)}
+        />
       )}
     </div>
   );

@@ -81,6 +81,8 @@ interface AppContextType extends AppState {
   changePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
   quickDemoLogin: (target: 'landlord' | 'tenant' | 'admin' | 'multi' | 'suspended') => Promise<void>;
   addProperty: (property: Omit<Property, 'id' | 'createdAt'>, unitDetails: { rent: number; deposit: number; bed: number; bath: number; sqft: number }) => Promise<void>;
+  createTenancy: (lease: { propertyId: string; unitId: string; tenantName: string; tenantEmail?: string; tenantPhone?: string; startDate: string; endDate: string; rentAmount: number; dueDay?: number; securityDeposit?: number }) => Promise<boolean>;
+  scheduleInspection: (job: { propertyId: string; unitId: string; tenancyId?: string; type: 'move_in' | 'move_out' | 'routine'; scheduledDate: string }) => Promise<boolean>;
   recordPayment: (payment: { unitId: string; tenancyId: string; chargeId: string; amount: number; method: RentPayment['method']; reference?: string; notes?: string }) => Promise<void>;
   addLedgerAdjustment: (chargeId: string, tenancyId: string, amount: number, reason: string) => Promise<void>;
   addMaintenanceTicket: (ticket: Omit<MaintenanceTicket, 'id' | 'ticketNumber' | 'submittedAt' | 'updatedAt'>) => Promise<void>;
@@ -1280,8 +1282,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) { failToast(e, 'Failed to add property'); }
   };
 
-  const recordPayment = async (payment: { unitId: string; tenancyId: string; chargeId: string; amount: number; method: RentPayment['method']; reference?: string; notes?: string }) => {
+  const createTenancy = async (lease: { propertyId: string; unitId: string; tenantName: string; tenantEmail?: string; tenantPhone?: string; startDate: string; endDate: string; rentAmount: number; dueDay?: number; securityDeposit?: number }) => {
     try {
+      const res = await api('/tenancies', { method: 'POST', body: JSON.stringify(lease) });
+      await refresh();
+      setToastMessage({ text: `Lease created for ${lease.tenantName}: ${res.chargesGenerated} monthly rent bills generated.`, type: 'success' });
+      return true;
+    } catch (e) { failToast(e, 'Failed to create lease'); return false; }
+  };
+
+  const scheduleInspection = async (job: { propertyId: string; unitId: string; tenancyId?: string; type: 'move_in' | 'move_out' | 'routine'; scheduledDate: string }) => {
+    try {
+      await api('/inspections', { method: 'POST', body: JSON.stringify(job) });
+      await refresh();
+      setToastMessage({ text: `Inspection scheduled (${job.type.replace('_', '-')}) with a 6-item checklist.`, type: 'success' });
+      return true;
+    } catch (e) { failToast(e, 'Failed to schedule inspection'); return false; }
+  };
+
+  const recordPayment = async (payment: { unitId: string; tenancyId: string; chargeId: string; amount: number; method: RentPayment['method']; reference?: string; notes?: string }) => {    try {
       await api('/payments', { method: 'POST', body: JSON.stringify(payment) });
       await refresh();
       setToastMessage({ text: `Payment of $${payment.amount.toLocaleString()} recorded. Marked as Landlord-Reported.`, type: 'success' });
@@ -1365,7 +1384,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         switchActiveRole, updateUserProfile, toggleUserSuspension, changePassword, quickDemoLogin,
         properties, units, tenancies, rentCharges, payments, adjustments, maintenanceTickets,
         tasks, inspections, conversations, messages, legalResources, documents, auditLogs,
-        subscriptionPlans, activePlanId, toastMessage, setCurrentRole, addProperty, recordPayment,
+        subscriptionPlans, activePlanId, toastMessage, setCurrentRole, addProperty, createTenancy, scheduleInspection, recordPayment,
         addLedgerAdjustment, addMaintenanceTicket, updateTicketStatus, addTask, toggleTaskStatus,
         updateInspectionItem, signInspection, sendMessage, toggleBookmarkResource,
         simulateLiveRentEvent, simulateLiveMaintenanceEvent, clearToast,

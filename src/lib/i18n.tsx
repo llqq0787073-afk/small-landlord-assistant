@@ -336,6 +336,24 @@ const translations: Record<Language, Record<string, string>> = {
     invitationManagementTitle: 'Tenant Invitations Registry',
     generateInviteCode: 'Generate New Tenant Invite',
 
+    // Lease (tenancy) creation
+    newLeaseTitle: 'Create Lease',
+    newLeaseBtn: 'New Lease',
+    leaseTenantName: 'Tenant Name',
+    leaseTenantEmail: 'Tenant Email',
+    leaseTenantPhone: 'Tenant Phone',
+    leaseStartDate: 'Lease Start',
+    leaseEndDate: 'Lease End',
+    leaseMonthlyRent: 'Monthly Rent ($)',
+    leaseDueDay: 'Due Day (1-28)',
+    leaseSecurityDeposit: 'Security Deposit ($)',
+    leaseCreateBtn: 'Create Lease & Generate Bills',
+    leaseRequiredFirst: 'Create a lease for this unit first, then generate the invite code.',
+    inspectionType: 'Inspection Type',
+    inspectionDate: 'Scheduled Date',
+    scheduleInspectionTitle: 'Schedule Inspection',
+    scheduleInspectionBtn: 'Schedule Inspection',
+
     // Common Actions
     save: 'Save',
     cancel: 'Cancel',
@@ -689,6 +707,24 @@ const translations: Record<Language, Record<string, string>> = {
     activateAccount: '恢复正常使用',
     invitationManagementTitle: '租客邀请码管理',
     generateInviteCode: '生成新租客邀请码',
+
+    // Lease (tenancy) creation
+    newLeaseTitle: '新建租约',
+    newLeaseBtn: '新建租约',
+    leaseTenantName: '租客姓名',
+    leaseTenantEmail: '租客邮箱',
+    leaseTenantPhone: '租客电话',
+    leaseStartDate: '租约开始日期',
+    leaseEndDate: '租约结束日期',
+    leaseMonthlyRent: '月租金 ($)',
+    leaseDueDay: '每月收租日 (1-28)',
+    leaseSecurityDeposit: '押金 ($)',
+    leaseCreateBtn: '创建租约并生成账单',
+    leaseRequiredFirst: '请先为该单元创建租约，再生成邀请码。',
+    inspectionType: '检查类型',
+    inspectionDate: '计划日期',
+    scheduleInspectionTitle: '发起检查',
+    scheduleInspectionBtn: '发起检查',
 
     // Common Actions
     save: '保存',

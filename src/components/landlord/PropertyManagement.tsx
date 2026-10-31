@@ -3,6 +3,7 @@ import { useI18n } from '../../lib/i18n';
 import { useAppStore } from '../../lib/store';
 import { Property, Unit, UnitStatus } from '../../types';
 import { TenantInvitationManager } from './TenantInvitationManager';
+import { NewLeaseModal } from '../modals/NewLeaseModal';
 import {
   Building2,
   Plus,
@@ -33,6 +34,7 @@ export const PropertyManagement: React.FC<PropertyManagementProps> = ({
   const { properties, units, tenancies } = useAppStore();
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [leaseUnitId, setLeaseUnitId] = useState<string | null>(null);
 
   const filteredProperties = selectedPropertyId === 'all'
     ? properties
@@ -293,6 +295,14 @@ export const PropertyManagement: React.FC<PropertyManagementProps> = ({
                     >
                       {lang === 'zh' ? '租金明细' : 'Ledger'}
                     </button>
+                    {!tenancy && (
+                      <button
+                        onClick={() => setLeaseUnitId(unit.id)}
+                        className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-sm"
+                      >
+                        {t('newLeaseBtn')}
+                      </button>
+                    )}
                     <button
                       onClick={() => setActiveTab('inspections')}
                       className="px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors"
@@ -309,6 +319,14 @@ export const PropertyManagement: React.FC<PropertyManagementProps> = ({
 
       {/* Tenant Invitations & Activation Codes Section (Section 33 & 36) */}
       <TenantInvitationManager />
+
+      {leaseUnitId && (
+        <NewLeaseModal
+          isOpen={!!leaseUnitId}
+          onClose={() => setLeaseUnitId(null)}
+          unitId={leaseUnitId}
+        />
+      )}
     </div>
   );
 };

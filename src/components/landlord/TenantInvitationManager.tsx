@@ -38,11 +38,15 @@ export const TenantInvitationManager: React.FC = () => {
     e.preventDefault();
     if (!selectedPropId || !selectedUnitId || !tenantEmail) return;
 
-    const matchedTenancy = tenancies.find(t => t.unitId === selectedUnitId);
+    // An invitation must bind to a REAL tenancy. Never fabricate an ID:
+    // without a lease there are no bills, and the tenant would see nothing.
+    const matchedTenancy = tenancies.find(t => t.unitId === selectedUnitId && t.status === 'active');
+    if (!matchedTenancy) return;
+
     createTenantInvitation(
       selectedPropId,
       selectedUnitId,
-      matchedTenancy?.id || `ten_${selectedUnitId}`,
+      matchedTenancy.id,
       tenantEmail
     );
 
@@ -239,6 +243,13 @@ export const TenantInvitationManager: React.FC = () => {
                 <p>✓ {lang === 'zh' ? '租客激活时自动写入 tenancy_members 授权记录' : 'Cryptographically verified lease binding'}</p>
               </div>
 
+              {!tenancies.some(t => t.unitId === selectedUnitId && t.status === 'active') && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{t('leaseRequiredFirst')}</span>
+                </div>
+              )}
+
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -249,7 +260,8 @@ export const TenantInvitationManager: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-semibold shadow-sm"
+                  disabled={!tenancies.some(t => t.unitId === selectedUnitId && t.status === 'active')}
+                  className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white rounded-lg font-semibold shadow-sm"
                 >
                   {lang === 'zh' ? '立即生成' : 'Generate Code'}
                 </button>
